@@ -1,0 +1,15 @@
+*.img
+*.ini
+*.bin
+*.map
+*.o
+*.out
+*.zst
+*.gz
+*.lock
+*.vmdk
+
+.vscode
+
+build
+bochs-2.8
