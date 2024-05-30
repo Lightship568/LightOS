@@ -7,7 +7,7 @@
 */
 
 
-#include <lightos/types.h>
+#include <sys/types.h>
 
 extern u8 inb(u16 port);  // 输入一个字节
 extern u16 inw(u16 port); // 输入一个字

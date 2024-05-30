@@ -1,4 +1,4 @@
-#include <lightos/string.h>
+#include <lib/string.h>
 
 char *strcpy(char *dest, const char *src)
 {

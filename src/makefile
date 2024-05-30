@@ -39,16 +39,19 @@ $(BUILD)/lib/%.o: $(SRC)/lib/%.c
 	$(shell mkdir -p $(dir $@))
 	gcc $(CFLAGS) $(DEBUG) $(INCLUDE) -c $< -o $@
 
-#kernel
+# kernel
+# -T 重定位text入口地址
 $(BUILD)/kernel.bin: \
-	$(BUILD)/kernel/head.o	\
-	$(BUILD)/kernel/main.o	\
-	$(BUILD)/kernel/io.o	\
+	$(BUILD)/kernel/head.o		\
+	$(BUILD)/kernel/main.o		\
+	$(BUILD)/kernel/io.o		\
 	$(BUILD)/kernel/console.o	\
-	$(BUILD)/lib/string.o	\
+	$(BUILD)/lib/string.o		\
+	$(BUILD)/lib/vsprintf.o	\
+	$(BUILD)/lib/print.o		\
 
 	$(shell mkdir -p $(dir $@))
-	ld -m elf_i386 -static $^ -o $@ -Ttext $(ENTRYPOINT) #重定位text入口地址
+	ld -m elf_i386 -static $^ -o $@ -Ttext $(ENTRYPOINT) 
 
 # 方便loader加载内核
 $(BUILD)/system.bin: $(BUILD)/kernel.bin

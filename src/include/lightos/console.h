@@ -6,7 +6,7 @@
  * CGA
 */
 
-#include <lightos/types.h>
+#include <sys/types.h>
 
 void console_init();
 void console_clear();

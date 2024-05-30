@@ -53,7 +53,15 @@ display_library: x, options="gui_debug"
 ata0-master: type=disk, path="LightOS.img", mode=flat
 之后就可以顺利通过bochs -q启动界面与debug界面了。
 
+## 一些知识点
+
+* gdb 打印栈：`-exec display/16xw $sp`，16为打印数。
+* DWARF：调试信息（debugging information），用于调试，获得调试异常
+* CFI也就是控制流完整性，gcc编译成汇编时会自动添加开头部分的伪指令
+* 硬盘类型，以及为什么选择IDE启动？
+
 ## Makefile
+
 为了自动化编译内核，需要使用make工具
 ```
 boot.bin: boot.asm
@@ -395,14 +403,6 @@ ln -s /mnt/hgfs/LightOS ~/Desktop
 
 后面干了挺多东西，比如添加git，创建vmware虚拟机，这些对应p16。其中vscode 的 git ui 中 commit 会报错没有username 和 email，命令行就好了。还有一个坑就是，vmware创建虚拟机时候的最后一步指定了已经存在的镜像文件后，需要“转换镜像格式”，否则会boot error，评论区说可能是55aa的问题。
 
-### 一些知识点
-
-DWARF：调试信息（debugging information），用于调试，获得调试异常
-
-CFI也就是控制流完整性，gcc编译成汇编时会自动添加开头部分的伪指令
-
-硬盘类型，以及为什么选择IDE启动？
-
 ## 端口输入输出
 
 端口就是外部设备的内部寄存器编号。显示相关的端口：
@@ -446,7 +446,7 @@ https://en.cppreference.com/w/c/string/byte
 - EGA (Enhanced Graphics Adapter)
 - MCGA (Multi Color Graphics Array)
 
-## CRTC (Cathode Ray Tube Controller)
+### CRTC (Cathode Ray Tube Controller)
 
 CGA 使用的 MC6845 芯片；
 
@@ -459,3 +459,45 @@ CGA 使用的 MC6845 芯片；
 
 控制字符参考 onix 笔记 022 基础显卡驱动，这里不记录了。
 
+写终端驱动挺有意思的
+
+## 可变参数+printk
+
+原理是通过宏来自动获取栈上参数，实际上很好实现，我认为本质上是编译器默许了调用者的任意参数压栈。
+
+C 中实现于 stdarg.h，linux中也有实现。
+
+```c
+typedef char *va_list;
+
+#define stack_size(t) (sizeof(t) <= sizeof(char *) ? sizeof(char *) : sizeof(t))
+#define va_start(ap, v) (ap = (va_list)&v + sizeof(char *))
+#define va_arg(ap, t) (*(t *)((ap += stack_size(t)) - stack_size(t)))
+#define va_end(ap) (ap = (va_list)0)
+```
+
+此外，printf 的 format 中也有函数参数数量的标记，有多少个百分号，就有多少个参数。
+
+### 格式指示串的形式：
+
+> `%[flags][width][.prec][h|l|L][type]`
+
+
+- `%`：格式引入字符
+- `flags`：可选的标志字符序列
+- `width`：可选的宽度指示符
+- `.prec`：可选的精度指示符
+- `h|l|L`：可选的长度修饰符
+- `type`：转换类型
+
+### flags
+
+flags 控制输出对齐方式、数值符号、小数点、尾零、二进制、八进制或十六进制等，具体格式如下：
+
+- `-`：左对齐，默认为右对齐
+- `+`：输出 + 号
+- ` `：如果带符号的转换不以符号开头则添加空格，如果存在 `+` 则忽略
+- `#`：特殊转换：
+    - 八进制，转换后字符串首位必须是 `0`
+    - 十六进制，转换后必须以 `0x` 或 `0X` 开头
+- `0`：使用 `0` 代替空格
