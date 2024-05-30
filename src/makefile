@@ -19,13 +19,25 @@ DEBUG:= -g
 INCLUDE:= -I$(SRC)/include
 
 # 模式规则
-# boot
-$(BUILD)/boot/%.bin: $(SRC)/boot/%.asm
+# boot(boot/loader.asm)
+$(BUILD)/boot/boot.bin: $(SRC)/boot/boot.asm
 	$(shell mkdir -p $(dir $@))
 	nasm -f bin $(DEBUG) $< -o $@
+$(BUILD)/boot/loader.bin: $(SRC)/boot/loader.asm
+	$(shell mkdir -p $(dir $@))
+	nasm -f bin $(DEBUG) $< -o $@
+# head.asm
+$(BUILD)/boot/head.o: $(SRC)/boot/head.asm
+	$(shell mkdir -p $(dir $@))
+	nasm -f elf32 $(DEBUG) $< -o $@
 
-# kernel (head.o)
-$(BUILD)/kernel/%.o: $(SRC)/kernel/%.asm
+# init/main.c
+$(BUILD)/kernel/main.o: $(SRC)/init/main.c
+	$(shell mkdir -p $(dir $@))
+	gcc $(CFLAGS) $(DEBUG) $(INCLUDE) -c $< -o $@
+
+# lib (*.asm)
+$(BUILD)/lib/%.o: $(SRC)/lib/%.asm
 	$(shell mkdir -p $(dir $@))
 	nasm -f elf32 $(DEBUG) $< -o $@
 
@@ -42,14 +54,16 @@ $(BUILD)/lib/%.o: $(SRC)/lib/%.c
 # kernel
 # -T 重定位text入口地址
 $(BUILD)/kernel.bin: \
-	$(BUILD)/kernel/head.o		\
+	$(BUILD)/boot/head.o		\
 	$(BUILD)/kernel/main.o		\
-	$(BUILD)/kernel/io.o		\
+	$(BUILD)/lib/io.o		\
 	$(BUILD)/kernel/console.o	\
 	$(BUILD)/lib/string.o		\
-	$(BUILD)/lib/vsprintf.o	\
+	$(BUILD)/lib/vsprintf.o		\
 	$(BUILD)/lib/print.o		\
 	$(BUILD)/lib/assert.o		\
+	$(BUILD)/lib/debug.o		\
+	$(BUILD)/kernel/global.o	\
 
 	$(shell mkdir -p $(dir $@))
 	ld -m elf_i386 -static $^ -o $@ -Ttext $(ENTRYPOINT) 
