@@ -1,3 +1,8 @@
+/**
+ * 基础类型定义
+ * 方便后续开发
+*/
+
 # ifndef LIGHTOS_TYPES_H
 # define LIGHTOS_TYPES_H
 

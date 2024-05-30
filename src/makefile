@@ -3,13 +3,16 @@ SRC:= .
 ENTRYPOINT:= 0x10000
 
 CFLAGS:= -m32
+# CFLAGS:= -Qn 					#去掉gcc版本信息
 CFLAGS+= -fno-builtin 			#不需要gcc内置函数（比如memcpy）
 CFLAGS+= -nostdinc 				#不需要标准头文件（c的）
 CFLAGS+= -nostdlib 				#不需要标准库
 CFLAGS+= -fno-pic 				#不需要 position independent code
 CFLAGS+= -fno-pie 				#不需要 position independent excutable
 CFLAGS+= -fno-stack-protector	#不需要栈保护
-
+# CFLAGS+= -fomit-frame-pointer	#不需要栈帧
+# CFLAGS+= -mpreferred-stack-boundary=2	#不需要栈对齐
+# CFLAGS+= -fno-asynchronous-unwind-tables	#不需要 CFI 信息
 CFLAGS:=$(strip ${CFLAGS}) 		#去除\t
 
 DEBUG:= -g
@@ -19,7 +22,7 @@ INCLUDE:= -I$(SRC)/include
 # boot
 $(BUILD)/boot/%.bin: $(SRC)/boot/%.asm
 	$(shell mkdir -p $(dir $@))
-	nasm -f bin $< -o $@
+	nasm -f bin $(DEBUG) $< -o $@
 
 # kernel (head.o)
 $(BUILD)/kernel/%.o: $(SRC)/kernel/%.asm
@@ -31,8 +34,19 @@ $(BUILD)/kernel/%.o: $(SRC)/kernel/%.c
 	$(shell mkdir -p $(dir $@))
 	gcc $(CFLAGS) $(DEBUG) $(INCLUDE) -c $< -o $@
 
+# lib (*.c)
+$(BUILD)/lib/%.o: $(SRC)/lib/%.c
+	$(shell mkdir -p $(dir $@))
+	gcc $(CFLAGS) $(DEBUG) $(INCLUDE) -c $< -o $@
+
 #kernel
-$(BUILD)/kernel.bin: $(BUILD)/kernel/head.o $(BUILD)/kernel/main.o
+$(BUILD)/kernel.bin: \
+	$(BUILD)/kernel/head.o	\
+	$(BUILD)/kernel/main.o	\
+	$(BUILD)/kernel/io.o	\
+	$(BUILD)/kernel/console.o	\
+	$(BUILD)/lib/string.o	\
+
 	$(shell mkdir -p $(dir $@))
 	ld -m elf_i386 -static $^ -o $@ -Ttext $(ENTRYPOINT) #重定位text入口地址
 

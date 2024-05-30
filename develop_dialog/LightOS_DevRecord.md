@@ -353,7 +353,7 @@ sudo apt-get install libxrandr-dev
 
 配不好了，用2.8测了，同样的configure编译出来的bochs不一样，用bochs生成的配置文件不匹配，后编译的没有debug-stub，如果用后来编译出来的bochs强行运行之前的配置会报缺少iodebug插件，看来是configure编译出来的bochs不一样。
 
-## 新的环境配置
+### 新的环境配置
 
 问了lyq之后考虑放弃bochs，采用vmware+ubuntu+qemu的开发测试环境。首先ubuntu开启远程ssh。注，vscode将在2025取消对老内核的远程连接支持，所以ubuntu需要 >= 20.04
 
@@ -390,4 +390,72 @@ chmod 777 /etc/fstab
 # 链接
 ln -s /mnt/hgfs/LightOS ~/Desktop
 ```
+
+---
+
+后面干了挺多东西，比如添加git，创建vmware虚拟机，这些对应p16。其中vscode 的 git ui 中 commit 会报错没有username 和 email，命令行就好了。还有一个坑就是，vmware创建虚拟机时候的最后一步指定了已经存在的镜像文件后，需要“转换镜像格式”，否则会boot error，评论区说可能是55aa的问题。
+
+### 一些知识点
+
+DWARF：调试信息（debugging information），用于调试，获得调试异常
+
+CFI也就是控制流完整性，gcc编译成汇编时会自动添加开头部分的伪指令
+
+硬盘类型，以及为什么选择IDE启动？
+
+## 端口输入输出
+
+端口就是外部设备的内部寄存器编号。显示相关的端口：
+
+```cpp
+#define CRT_ADDR_REG 0X3D4
+#define CRT_DATA_REG 0X3D5
+#define CRT_CURSOR_H 0XE
+#define CRT_CURSOR_L 0XF
+# 一个是地址寄存器，一个是数据寄存器
+# 读取：首先将需要读取的值（CURSOR_H/L）写入CRT_ADDR_REG也就是显示端口，之后读端口的数据寄存器（记得延迟一会再返回）
+void read_cursor(){
+    outb(CRT_ADDR_REG, CRT_CURSOR_H);
+    u16 pos = inb(CRT_DATA_REG) <<8;
+    outb(CRT_ADDR_REG, CRT_CURSOR_L);
+    pos |= inb(CRT_DATA_REG);
+}
+#写入同理
+void write_cursor(){
+	outb(CRT_ADDR_REG, CRT_CURSOR_H);
+    outb(CRT_DATA_REG, 0);
+    outb(CRT_ADDR_REG, CRT_CURSOR_L);
+    outb(CRT_DATA_REG, 0);
+}
+```
+
+## 字符串处理
+
+https://en.cppreference.com/w/c/string/byte
+
+## 显卡驱动
+
+- CGA (Color Graphics Adapter)
+    - 图形模式
+        - 160 * 100
+        - 320 * 240
+        - 640 * 200
+    - 文本模式
+        - 40 * 25
+        - 80 * 25
+- EGA (Enhanced Graphics Adapter)
+- MCGA (Multi Color Graphics Array)
+
+## CRTC (Cathode Ray Tube Controller)
+
+CGA 使用的 MC6845 芯片；
+
+- CRT 地址寄存器 0x3D4
+- CRT 数据寄存器 0x3D5
+- CRT 光标位置 - 高位 0xE
+- CRT 光标位置 - 低位 0xF
+- CRT 显示开始位置 - 高位 0xC
+- CRT 显示开始位置 - 低位 0xD
+
+控制字符参考 onix 笔记 022 基础显卡驱动，这里不记录了。
 

@@ -1,12 +1,24 @@
-# include <lightos/lightos.h>
+/**
+ * main.c
+*/
 
-int magic = LIGHTOS_MAGIC;
-char message[] = "hello LightOS!!!!!!!";
-char buf[1024];
+#include <lightos/lightos.h>
+#include <lightos/types.h>
+#include <lightos/io.h>
+#include <lightos/console.h>
+
+char message[] = "hello LightOS!!!111111111111111111111111111111111111111111111\n\0";
+
 
 void kernel_init(){
-    char *video = (char*) 0xb8000; //文本显示器内存位置
-    for (int i = 0; i <sizeof(message); i++){
-        video[i*2] = message[i];
+    console_init(); 
+    for (size_t i = 0; i < 99999; i++)
+    {
+        console_write(message, -1);
     }
-}
+    
+    
+    // console_write(message, sizeof(message));
+    while(true);
+    return;
+} 
