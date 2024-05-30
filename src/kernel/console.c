@@ -86,7 +86,7 @@ static void scroll_up(){
     }else{
         // 以1/4为分割，拷贝后3/4到开头，覆盖前1/4
         // 简单观察过结果，应该没问题
-        memcpy(SCREEN_MEM_BASE, SCREEN_MEM_BASE + (SCREEN_MEM_SIZE - SCREEN_MEM_DIVIDE), SCREEN_MEM_DIVIDE);
+        memcpy((void *)SCREEN_MEM_BASE, (void *)(SCREEN_MEM_BASE + (SCREEN_MEM_SIZE - SCREEN_MEM_DIVIDE)), SCREEN_MEM_DIVIDE);
         screen -= SCREEN_MEM_SIZE - SCREEN_MEM_DIVIDE; //差值
         pos -= SCREEN_MEM_SIZE - SCREEN_MEM_DIVIDE;
         u16* ptr = (u16*) (screen + SCR_SIZE);
@@ -124,7 +124,7 @@ void console_clear(){
     set_cursor();
     
     u16 *ptr = (u16*) SCREEN_MEM_BASE;
-    while(ptr < SCREEN_MEM_END){
+    while(ptr < (u16 *)SCREEN_MEM_END){
         *ptr++ = erase;
     }
 }
@@ -134,7 +134,6 @@ void console_write(char *buf, u32 count){
         count = strlen(buf);
     }
     char ch;
-    char *ptr = (char*)pos;
     while (count--){
         ch = *buf++;
         switch (ch)
@@ -152,11 +151,11 @@ void console_write(char *buf, u32 count){
             // todo bell声音
             break;
         case ASCII_BS:  //backspace
-        if (x){
-            x--;
-            pos -= 2;
-            *(u16*)pos = erase;
-        }
+            if (x){
+                x--;
+                pos -= 2;
+                *(u16*)pos = erase;
+            }
             break;
         case ASCII_HT:  //t HT (Horizontal Tab)
 
@@ -178,14 +177,14 @@ void console_write(char *buf, u32 count){
             *(u16*)pos = erase;
             break;
         default:
-            *ptr++ = ch;
-            *ptr++ = attr;
+            *(u8 *)pos = ch;
+            *((u8 *)pos+1) = attr;
             pos += 2;
             set_xy();
             break;
         }
+        set_cursor();
     }
-    set_cursor();
 }
 
 void console_init(){

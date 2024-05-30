@@ -3,9 +3,10 @@
  * Wirzenius wrote this portably, Torvalds fucked it up :-)
  */
 
-#include <lib/stdarg.h>
+#include <sys/types.h>
+#include <lib/vsprintf.h>
 #include <lib/string.h>
-// #include <lib/assert.h>
+#include <lib/assert.h>
 
 #define ZEROPAD 0x01 // 填充零
 #define SIGN 0x02    // unsigned/signed long
@@ -437,7 +438,7 @@ int vsprintf(char *buf, const char *fmt, va_list args)
 
     // 返回转换好的字符串长度值
     i = str - buf;
-    // assert(i < 1024);
+    assert(i < 1024);
     return i;
 }
 
