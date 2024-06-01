@@ -88,6 +88,6 @@ typedef struct tss_t
     u32 ssp;           // 任务影子栈指针
 } _packed tss_t;
 
-void gdt_init();
+void gdt_init(void);
 
 #endif

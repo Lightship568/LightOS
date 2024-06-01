@@ -5,7 +5,7 @@
 descriptor_t gdt[GDT_SIZE];
 pointer_t gdt_ptr;
 
-void gdt_init() {
+void gdt_init(void){
     asm volatile("sgdt gdt_ptr");
 
     memcpy(&gdt, (void*)gdt_ptr.base, gdt_ptr.limit + 1);
