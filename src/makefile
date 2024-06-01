@@ -36,20 +36,25 @@ $(BUILD)/kernel/main.o: $(SRC)/init/main.c
 	$(shell mkdir -p $(dir $@))
 	gcc $(CFLAGS) $(DEBUG) $(INCLUDE) -c $< -o $@
 
-# lib (*.asm)
-$(BUILD)/lib/%.o: $(SRC)/lib/%.asm
-	$(shell mkdir -p $(dir $@))
-	nasm -f elf32 $(DEBUG) $< -o $@
-
 # kernel (*.c)
 $(BUILD)/kernel/%.o: $(SRC)/kernel/%.c
 	$(shell mkdir -p $(dir $@))
 	gcc $(CFLAGS) $(DEBUG) $(INCLUDE) -c $< -o $@
 
+# kernel (*.asm)
+$(BUILD)/kernel/%.o: $(SRC)/kernel/%.asm
+	$(shell mkdir -p $(dir $@))
+	nasm -f elf32 $(DEBUG) $< -o $@
+
 # lib (*.c)
 $(BUILD)/lib/%.o: $(SRC)/lib/%.c
 	$(shell mkdir -p $(dir $@))
 	gcc $(CFLAGS) $(DEBUG) $(INCLUDE) -c $< -o $@
+
+# lib (*.asm)
+$(BUILD)/lib/%.o: $(SRC)/lib/%.asm
+	$(shell mkdir -p $(dir $@))
+	nasm -f elf32 $(DEBUG) $< -o $@
 
 # kernel
 # -T 重定位text入口地址
@@ -64,6 +69,8 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/lib/assert.o		\
 	$(BUILD)/lib/debug.o		\
 	$(BUILD)/kernel/global.o	\
+	$(BUILD)/kernel/interrupt.o	\
+	$(BUILD)/kernel/interrupt_handler.o	\
 
 	$(shell mkdir -p $(dir $@))
 	ld -m elf_i386 -static $^ -o $@ -Ttext $(ENTRYPOINT) 

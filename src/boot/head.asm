@@ -4,10 +4,8 @@ extern kernel_init
 
 global _start:
 _start:
-    ; mov byte [0xb8000], 'K'
-    ; xchg bx,bx
-    call kernel_init
-    xchg bx,bx
-    
-
-    jmp $
+    push L6 ; return address for
+    push kernel_init ; return to kernel
+    ret
+L6:
+	jmp L6

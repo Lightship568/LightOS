@@ -14,7 +14,7 @@
 
 #define EOS '\0' // 字符串结尾
 
-#define bool _Bool
+// #define bool _Bool
 #define true 1
 #define false 0
 

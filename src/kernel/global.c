@@ -1,6 +1,6 @@
 #include <lib/debug.h>
 #include <lib/string.h>
-#include <lightos/global.h>
+#include <sys/global.h>
 
 descriptor_t gdt[GDT_SIZE];
 pointer_t gdt_ptr;
@@ -18,5 +18,5 @@ void gdt_init() {
     // asm volatile("lgdt gdt_ptr\n"); 
     asm volatile ("lgdt %0" : : "m" (gdt_ptr));
 
-    DEBUGK("GDT Initialized at %p", gdt);
+    DEBUGK("GDT Initialized at 0x%p\n", gdt);
 }

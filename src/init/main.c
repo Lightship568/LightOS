@@ -8,7 +8,8 @@
 #include <lib/print.h>
 #include <lib/assert.h>
 #include <lib/debug.h>
-#include <lightos/global.h>
+#include <sys/global.h>
+#include <sys/interrupt.h>
 
 char message[] = "hello \nLightOS!!!111111111111111111111111111111111111111111111\n\0";
 
@@ -19,6 +20,15 @@ void kernel_init(){
         printk("%-*d%s",5,i,message);
     }
     gdt_init();
+    interrupt_init();
+    
+    asm volatile (
+    "int $0x80" 
+    : 
+    : "a"(0)
+    : "memory"
+    );
+
     while(true);
     return;
 } 
