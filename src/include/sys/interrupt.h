@@ -70,6 +70,8 @@ typedef struct gate_t
 
 typedef void *handler_t; // 中断处理函数
 
-void interrupt_init();
+void interrupt_init(void);
+
+void syscall_0(void);
 
 #endif

@@ -3,6 +3,6 @@
 
 # define LIGHTOS_MAGIC 20240522
 
-void kernel_init(); //内核初始化
+void kernel_init(void); //内核初始化
 
 # endif

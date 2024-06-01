@@ -14,7 +14,7 @@
 char message[] = "hello \nLightOS!!!111111111111111111111111111111111111111111111\n\0";
 
 
-void kernel_init(){
+void kernel_init(void){
     console_init(); 
     for (int i = 0; i < 50; ++i){
         printk("%-*d%s",5,i,message);

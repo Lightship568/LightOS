@@ -57,11 +57,11 @@ void default_handler(int vector){
     panic("Interrupt: [0x%2X] default interrupt called...\n", vector);
 }
 
-void syscall_0(){
+void syscall_0(void){
     DEBUGK("SYSCALL: 0x80 syscall called...\n");
 }
 
-void interrupt_init(){
+void interrupt_init(void){
     gate_t *gate;
     handler_t handler;
     for (size_t i = 0; i < IDT_SIZE; ++i){

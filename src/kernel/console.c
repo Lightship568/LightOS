@@ -41,7 +41,7 @@ static u8 attr = 7; // 字符样式
 static u16 erase = 0x0720;   //删除后清空为空格
 
 // 获得当前指针的开始位置
-static void get_screen(){
+static void get_screen(void){
     outb(CRT_ADDR_REG, CRT_START_ADDR_H);
     screen = inb(CRT_DATA_REG) << 8;
     outb(CRT_ADDR_REG, CRT_START_ADDR_L);
@@ -50,7 +50,7 @@ static void get_screen(){
 }
 
 // 设置显示器开始的位置
-static void set_screen(){
+static void set_screen(void){
     outb(CRT_ADDR_REG, CRT_START_ADDR_H);
     outb(CRT_DATA_REG, ((screen - SCREEN_MEM_BASE) >> 9) & 0xff);
     outb(CRT_ADDR_REG, CRT_START_ADDR_L);
@@ -58,7 +58,7 @@ static void set_screen(){
 }
 
 // 获得光标位置
-static void get_cursor(){
+static void get_cursor(void){
     outb(CRT_ADDR_REG, CRT_CURSOR_H);
     pos = inb(CRT_DATA_REG) << 8;
     outb(CRT_ADDR_REG, CRT_CURSOR_L);
@@ -69,14 +69,14 @@ static void get_cursor(){
 }
 
 // 设置光标位置
-static void set_cursor(){
+static void set_cursor(void){
     outb(CRT_ADDR_REG, CRT_CURSOR_H);
     outb(CRT_DATA_REG, ((pos - SCREEN_MEM_BASE) >> 9) & 0xff);
     outb(CRT_ADDR_REG, CRT_CURSOR_L);
     outb(CRT_DATA_REG, ((pos - SCREEN_MEM_BASE) >> 1) & 0xff);
 }
 
-static void scroll_up(){
+static void scroll_up(void){
     if (screen + SCR_SIZE + ROW_SIZE <= SCREEN_MEM_END){
         u16* ptr = (u16*) (screen + SCR_SIZE);
         for (size_t i = 0; i < WIDTH; i++) {
@@ -99,13 +99,13 @@ static void scroll_up(){
     }
 }
 
-static void scroll_down(){
+static void scroll_down(void){
     screen -= ROW_SIZE;
     set_screen();
 }
 
 // 计算 xy 位置
-static void set_xy(){
+static void set_xy(void){
     u32 tmp = (pos - screen) >> 1;
     x = tmp % WIDTH;
     y = tmp / WIDTH;
@@ -117,7 +117,7 @@ static void set_xy(){
     }
 }
 
-void console_clear(){
+void console_clear(void){
     screen = SCREEN_MEM_BASE;
     pos = SCREEN_MEM_BASE;
     x = y = 0;
@@ -188,7 +188,7 @@ void console_write(char *buf, u32 count){
     }
 }
 
-void console_init(){
+void console_init(void){
     console_clear(); 
     DEBUGK("Console initialized"); 
 }
