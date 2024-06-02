@@ -69,7 +69,11 @@ typedef struct gate_t {
 
 typedef void* handler_t;  // 中断处理函数
 
+// 中断初始化，包括 IDT 的初步设置
 void interrupt_init(void);
+
+// 通知中断控制器，中断处理结束
+void send_eoi(int vector);
 
 void syscall_0(void);
 
@@ -84,5 +88,14 @@ void start_interrupt(void);
 
 // 关中断
 void close_interrupt(void);
+
+// 注册异常处理函数
+void set_exception_handler(u32 intr, handler_t handler);
+
+// 注册中断处理函数
+void set_interrupt_handler(u32 irq, handler_t handler);
+
+// 设置中断mask，即是否禁用
+void set_interrupt_mask(u32 irq, bool enable);
 
 #endif

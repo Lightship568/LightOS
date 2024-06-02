@@ -10,8 +10,8 @@
 #include <lib/debug.h>
 #include <sys/global.h>
 #include <lightos/interrupt.h>
-#include <lib/stdlib.h>
-#include <lightos/task.h>
+
+extern void clock_init();
 
 char message[] = "hello LightOS!!!111111111111111111111111111111111111111111111\n\0";
 
@@ -23,18 +23,10 @@ void kernel_init(void){
     }
     gdt_init();
     interrupt_init();
-    task_test_init();
+    clock_init();
     start_interrupt();
 
-    // int a = 0;
-    // printk("%d",10/a);
-    
-    asm volatile ("int $0x80\n");
-
     u32 counter = 0;
-    while(true){
-        // DEBUGK("looping in kernel init %d...\n", counter++);
-        delay(100000000);
-    }
+    while(true) ;
     return;
 } 

@@ -61,19 +61,20 @@ $(BUILD)/lib/%.o: $(SRC)/lib/%.asm
 $(BUILD)/kernel.bin: \
 	$(BUILD)/boot/head.o		\
 	$(BUILD)/kernel/main.o		\
-	$(BUILD)/lib/io.o		\
+	$(BUILD)/lib/io.o			\
 	$(BUILD)/kernel/console.o	\
 	$(BUILD)/lib/string.o		\
 	$(BUILD)/lib/vsprintf.o		\
 	$(BUILD)/lib/print.o		\
-	$(BUILD)/kernel/assert.o		\
+	$(BUILD)/kernel/assert.o	\
 	$(BUILD)/lib/debug.o		\
 	$(BUILD)/kernel/global.o	\
 	$(BUILD)/kernel/interrupt.o	\
 	$(BUILD)/kernel/interrupt_handler.o	\
-	$(BUILD)/lib/stdlib.o	\
+	$(BUILD)/lib/stdlib.o		\
 	$(BUILD)/kernel/schedule.o	\
-	$(BUILD)/kernel/task.o	\
+	$(BUILD)/kernel/task.o		\
+	$(BUILD)/kernel/clock.o		\
 
 	$(shell mkdir -p $(dir $@))
 	ld -m elf_i386 -static $^ -o $@ -Ttext $(ENTRYPOINT) 
