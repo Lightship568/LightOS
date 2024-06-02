@@ -680,3 +680,7 @@ GPT 给总结了一下
 ### 中断上下文
 
 ![image-20240602195457164](E:\markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\interrupt_context)
+
+## 时钟
+
+多与硬件相关。

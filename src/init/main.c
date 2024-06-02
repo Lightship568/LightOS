@@ -6,10 +6,10 @@
 #include <lightos/console.h>
 #include <sys/types.h>
 #include <lib/print.h>
-#include <lib/assert.h>
+#include <sys/assert.h>
 #include <lib/debug.h>
 #include <sys/global.h>
-#include <sys/interrupt.h>
+#include <lightos/interrupt.h>
 #include <lib/stdlib.h>
 #include <lightos/task.h>
 

@@ -66,7 +66,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/lib/string.o		\
 	$(BUILD)/lib/vsprintf.o		\
 	$(BUILD)/lib/print.o		\
-	$(BUILD)/lib/assert.o		\
+	$(BUILD)/kernel/assert.o		\
 	$(BUILD)/lib/debug.o		\
 	$(BUILD)/kernel/global.o	\
 	$(BUILD)/kernel/interrupt.o	\

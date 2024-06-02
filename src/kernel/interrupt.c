@@ -1,7 +1,7 @@
-#include <lib/assert.h>
+#include <sys/assert.h>
 #include <lib/io.h>
 #include <sys/global.h>
-#include <sys/interrupt.h>
+#include <lightos/interrupt.h>
 #include <lib/print.h>
 #include <lib/debug.h>
 #include <lightos/task.h>
@@ -88,7 +88,7 @@ void pic_init() {
     outb(PIC_S_DATA, 2);            // ICW3: 设置从片连接到主片的 IR2 引脚
     outb(PIC_S_DATA, 0b00000001);   // ICW4: 8086模式, 正常EOI
 
-    outb(PIC_M_DATA, 0b11111110);   // 关闭所有中断
+    outb(PIC_M_DATA, 0b11111100);   // 关闭所有中断
     outb(PIC_S_DATA, 0b11111111);   // 关闭所有中断
 }
 
@@ -182,8 +182,7 @@ void exception_handler(
 u32 counter = 0;
 void outer_interrupt_handler(int vector) {
     send_eoi(vector);
-    // DEBUGK("[%x] outer interrupt %d...\n", vector, counter++);
-    task_schedule();
+    DEBUGK("[0x%x] outer interrupt %d...\n", vector, counter++);
 }
 
 // 系统调用

@@ -1,4 +1,4 @@
-#include <lib/assert.h>
+#include <sys/assert.h>
 #include <sys/stdarg.h>
 #include <sys/types.h>
 #include <lib/print.h>

@@ -2,7 +2,7 @@
 #include <sys/global.h>
 #include <lib/print.h>
 #include <lib/stdlib.h>
-#include <sys/interrupt.h>
+#include <lightos/interrupt.h>
 
 
 #define task1_base 0x1000

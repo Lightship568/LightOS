@@ -6,7 +6,7 @@
 #include <sys/types.h>
 #include <lib/vsprintf.h>
 #include <lib/string.h>
-#include <lib/assert.h>
+#include <sys/assert.h>
 
 #define ZEROPAD 0x01 // 填充零
 #define SIGN 0x02    // unsigned/signed long
