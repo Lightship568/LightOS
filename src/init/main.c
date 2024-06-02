@@ -11,8 +11,9 @@
 #include <sys/global.h>
 #include <sys/interrupt.h>
 #include <lib/stdlib.h>
+#include <lightos/task.h>
 
-char message[] = "hello \nLightOS!!!111111111111111111111111111111111111111111111\n\0";
+char message[] = "hello LightOS!!!111111111111111111111111111111111111111111111\n\0";
 
 
 void kernel_init(void){
@@ -22,13 +23,17 @@ void kernel_init(void){
     }
     gdt_init();
     interrupt_init();
+    task_test_init();
     start_interrupt();
+
+    // int a = 0;
+    // printk("%d",10/a);
     
     asm volatile ("int $0x80\n");
 
     u32 counter = 0;
     while(true){
-        DEBUGK("looping in kernel init %d...\n", counter++);
+        // DEBUGK("looping in kernel init %d...\n", counter++);
         delay(100000000);
     }
     return;

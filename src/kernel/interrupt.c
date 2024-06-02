@@ -2,7 +2,9 @@
 #include <lib/io.h>
 #include <sys/global.h>
 #include <sys/interrupt.h>
+#include <lib/print.h>
 #include <lib/debug.h>
+#include <lightos/task.h>
 
 gate_t idt[IDT_SIZE];
 pointer_t idt_ptr;
@@ -145,21 +147,43 @@ static char* messageList[] = {
 };
 
 // 异常处理函数（IDT 0x0-0x1f）
-void exception_handler(int vector) {
+void exception_handler(
+    int vector,
+    u32 edi, u32 esi, u32 ebp, u32 esp,
+    u32 ebx, u32 edx, u32 ecx, u32 eax,
+    u32 gs, u32 fs, u32 es, u32 ds,
+    u32 vector0, u32 error, u32 eip, u32 cs, u32 eflags)
+{
     char* message = NULL;
     if (vector < 22) {
         message = messageList[vector];
     } else {
         message = messageList[15];
     }
-    DEBUGK("Exception: [0x%2X] %s\n", vector, message);
+    printk("\nEXCEPTION : %s \n", message);
+    printk("   VECTOR : 0x%02X\n", vector);
+    printk("    ERROR : 0x%08X\n", error);
+    printk("   EFLAGS : 0x%08X\n", eflags);
+    printk("       CS : 0x%02X\n", cs);
+    printk("      EIP : 0x%08X\n", eip);
+    printk("      ESP : 0x%08X\n", esp);
+
+    bool hanging = true;
+    // 阻塞
+    while (hanging)
+        ;
+    // 通过 EIP 的值应该可以找到出错的位置
+    // 也可以在出错时，可以将 hanging 在调试器中手动设置为 0
+    // 然后在下面 return 打断点，单步调试，找到出错的位置
+    return;
 }
 
 // 外中断处理函数（IDT 0X20-0x2f）
 u32 counter = 0;
 void outer_interrupt_handler(int vector) {
     send_eoi(vector);
-    DEBUGK("[%x] outer interrupt handler called %d...\n", vector, counter++);
+    // DEBUGK("[%x] outer interrupt %d...\n", vector, counter++);
+    task_schedule();
 }
 
 // 系统调用
@@ -169,7 +193,7 @@ void syscall_0(void) {
 
 // 其余 IDT 默认中断处理函数
 void default_handler(int vector) {
-    panic("Interrupt: [0x%2X] default interrupt called...\n", vector);
+    panic("Interrupt: [0x%2X] default interrupt\n", vector);
 }
 
 void idt_init(void) {
@@ -179,9 +203,7 @@ void idt_init(void) {
         gate = &idt[i];
         if (i < TRAP_TABLE_SIZE) {  // 0x30 个 trap handler
             handler = trap_entry_table[i];
-        } else if (i == 0x80) {  // syscall
-            handler = syscall_entry;
-        } else {  // ingore interrupt
+        }else {  // ingore interrupt
             handler = default_handler;
         }
         gate->offset0 = (u32)handler & 0xffff;
@@ -201,6 +223,18 @@ void idt_init(void) {
     for (size_t i = 0x20; i < TRAP_TABLE_SIZE; ++i) {
         trap_handler_table[i] = outer_interrupt_handler;
     }
+
+    //设置syscall
+    gate = &idt[0x80];
+    gate->offset0 = (u32)syscall_entry & 0xffff;
+    gate->offset1 = ((u32)syscall_entry >> 16) & 0xffff;
+    gate->selector = 1 << 3;  // 代码段
+    gate->reserved = 0;
+    gate->type = 0b1110;  // 中断门
+    gate->segment = 0;    // 系统段
+    gate->DPL = 3;        // 内核态
+    gate->present = 1;    // 有效
+
     idt_ptr.base = (u32)idt;
     idt_ptr.limit = sizeof(idt) - 1;
     asm volatile("lidt idt_ptr\n");

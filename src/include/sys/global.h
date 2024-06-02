@@ -7,6 +7,8 @@
 
 #include <sys/types.h>
 
+#define PAGE_SIZE 4096
+
 #define GDT_SIZE 128
 
 #define KERNEL_CODE_IDX 1

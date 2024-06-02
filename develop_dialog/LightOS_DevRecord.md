@@ -1,4 +1,5 @@
-## 环境配置
+环境配置
+
 * WSL + Bochs + vsCode
 
 ### bochs安装需要图形化界面
@@ -666,8 +667,16 @@ GPT 给总结了一下
 
 ### 外中断
 
+### eflags
+
+![eflags](E:\markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\eflags.png)
+
 8086中采用了两片8259a可编程控制芯片，每片管理8个中断源，两片级联可以控制64个中断向量，但是 PC/AT 系列兼容机最多能够管理15个中断向量。主片端口0x20，从片0xa0。具体原理可参考onix 032 外中断原理，真的很有意思，这才是计算机科学。
 
-
-
 ![8259a](E:\markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\8259a.png)
+
+**sti 和 cli 都是针对外中断的，内中断和异常都是 cpu 片内事件，不受 eflags 中的 if 位控制。**
+
+### 中断上下文
+
+![image-20240602195457164](E:\markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\interrupt_context)

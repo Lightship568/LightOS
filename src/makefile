@@ -72,6 +72,8 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/interrupt.o	\
 	$(BUILD)/kernel/interrupt_handler.o	\
 	$(BUILD)/lib/stdlib.o	\
+	$(BUILD)/kernel/schedule.o	\
+	$(BUILD)/kernel/task.o	\
 
 	$(shell mkdir -p $(dir $@))
 	ld -m elf_i386 -static $^ -o $@ -Ttext $(ENTRYPOINT) 

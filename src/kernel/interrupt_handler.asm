@@ -17,8 +17,25 @@ TRAP_HANDLER_%1:
 %endmacro
 
 interrupt_entry:
-    mov eax, [esp]
+    ; 保存寄存器
+    push ds
+    push es
+    push fs
+    push gs
+    pusha; pusha / pushad 在32位行为一样，依次入栈EAX,ECX,EDX,EBX,ESP(初始值)，EBP,ESI,EDI.
+
+    mov eax, [esp + 12 * 4]
+    push eax
     call [trap_handler_table + eax * 4]
+    add esp, 4
+
+    ; 恢复寄存器
+    popa
+    pop gs
+    pop fs
+    pop es
+    pop ds
+
     add esp, 8
     iret
 
