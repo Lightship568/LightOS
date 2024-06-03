@@ -130,6 +130,7 @@ void console_clear(void){
     }
 }
 
+extern void start_beep(void);
 void console_write(char *buf, u32 count){
     if (count == -1){
         count = strlen(buf);
@@ -149,7 +150,7 @@ void console_write(char *buf, u32 count){
 
             break;
         case ASCII_BEL: //a
-            // todo bell声音
+            start_beep();
             break;
         case ASCII_BS:  //backspace
             if (x){
@@ -190,5 +191,5 @@ void console_write(char *buf, u32 count){
 
 void console_init(void){
     console_clear(); 
-    DEBUGK("Console initialized"); 
+    DEBUGK("Console initialize\n"); 
 }

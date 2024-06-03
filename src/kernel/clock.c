@@ -10,6 +10,7 @@
 #include <lightos/task.h>
 #include <sys/assert.h>
 #include <lib/io.h>
+#include <lib/stdlib.h>
 
 #define PIT_CHAN0_REG 0X40
 #define PIT_CHAN2_REG 0X42
@@ -20,34 +21,39 @@
 #define CLOCK_COUNTER (OSCILLATOR / HZ)
 #define JIFFY (1000 / HZ)
 
-#define SPEAKER_REG 0x61
+#define SPEAKER_REG 0x61 //历史遗留问题，这个也是键盘端口
 #define BEEP_HZ 440
 #define BEEP_COUNTER (OSCILLATOR / BEEP_HZ)
-#define BEEP_MS 100
+#define BEEP_JIFFY 100
 
 u32 volatile jiffies = 0;
 u32 jiffy = JIFFY;
 
-bool volatile beeping = 0;
+u32 volatile beeping = 0;
 
-// void start_beep(void) {
-//     if (!beeping) {
-//         outb(SPEAKER_REG, inb(SPEAKER_REG) | 0b11);
-//         beeping = true;
-
-//         task_sleep(BEEP_MS);
-
-//         outb(SPEAKER_REG, inb(SPEAKER_REG) & 0xfc);
-//         beeping = false;
-//     }
-// }
+void start_beep(void) {
+    outb(SPEAKER_REG, inb(SPEAKER_REG) | 0b11);
+    beeping = jiffies + BEEP_JIFFY;
+}
+void stop_beep(void){
+    if (beeping && jiffies > beeping){
+        outb(SPEAKER_REG, inb(SPEAKER_REG) & 0xfc);
+        beeping = 0;
+    }
+}
 
 void clock_handler(int vector) {
     assert(vector == 0x20);
     send_eoi(vector);  // 发送中断处理结束
 
     jiffies++;
-    DEBUGK("clock jiffies %d ...\n", jiffies);
+
+    if (jiffies % 200 == 0){
+        DEBUGK("clock jiffies %d ...\n", jiffies);
+
+        start_beep();
+    }
+    stop_beep();
 
     // timer_wakeup();
 
@@ -83,4 +89,5 @@ void clock_init(void) {
     pit_init();
     set_interrupt_handler(IRQ_CLOCK, clock_handler);
     set_interrupt_mask(IRQ_CLOCK, true);
+    DEBUGK("Clock Initialized\n");
 }

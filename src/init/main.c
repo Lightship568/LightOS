@@ -18,13 +18,11 @@ char message[] = "hello LightOS!!!111111111111111111111111111111111111111111111\
 
 void kernel_init(void){
     console_init(); 
-    for (int i = 0; i < 50; ++i){
-        printk("%-*d%s",5,i,message);
-    }
     gdt_init();
     interrupt_init();
     clock_init();
     start_interrupt();
+    printk("\a\n");
 
     u32 counter = 0;
     while(true) ;

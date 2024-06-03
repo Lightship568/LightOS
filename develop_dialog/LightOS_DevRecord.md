@@ -687,3 +687,30 @@ GPT 给总结了一下
 
 JIFFY：1000 / HZ，个人理解就是精度，也就是时间中断间隔，比如 HZ = 100 的情况下，精度也就是一个 slice 是 10ms，这也是时间的最小分辨率了。
 
+设置时要注意，CLOCK_COUNTER 是 4 字节，超过范围可能会被截断导致获得了意外的 jiffy，而且 HZ 太高会导致中断太频繁处理不了直接死机，测试大概 1000 就会与正常时间有一点差异了，10000就会卡，再往上就死机了。
+
+```c
+#define HZ 100
+#define OSCILLATOR 1193182
+#define CLOCK_COUNTER (OSCILLATOR / HZ)
+```
+
+## 蜂鸣器
+
+qemu中的音频驱动
+
+* **ALSA **：Advanced Linux Sound Architecture
+* coreaudio
+* dsound
+* oss
+* PulseAudio
+* SDL
+* spice
+* wav
+
+qemu失败，不知道什么原因，vmware中能够正常发声。考虑到不是什么重要功能，qemu就不调试了，跳过。
+
+
+
+
+

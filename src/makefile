@@ -114,6 +114,10 @@ qemu: $(BUILD)/LightOS.img
 	-m 32M \
 	-boot c \
 	-hda $<
+	# -drive file=$<,if=ide,index=0,media=disk,format=raw
+	-audiodev pa,id=hda,server=/run/user/1000/pulse/native \
+	-machine pcspk-audiodev=hda \
+	-device pcspk
 
 .PHONY: qemug
 qemug: $(BUILD)/LightOS.img

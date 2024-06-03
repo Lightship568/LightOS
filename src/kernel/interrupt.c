@@ -99,10 +99,12 @@ bool get_interrupt_state(void) {
 }
 
 void start_interrupt(void) {
+    DEBUGK("sti\n");
     asm volatile("sti\n");
 }
 
 void close_interrupt(void) {
+    DEBUGK("sti\n");
     asm volatile("cli\n");
 }
 
@@ -236,4 +238,5 @@ void idt_init(void) {
 void interrupt_init() {
     pic_init();
     idt_init();
+    DEBUGK("Interrupt Initialized\n");
 }
