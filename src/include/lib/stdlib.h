@@ -3,7 +3,7 @@
 
 #include <sys/types.h>
 
-void delay(u32 count);
+void delay(u32 second);
 void hang(void);
 
 u8 bcd_to_bin(u8 value);

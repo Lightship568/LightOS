@@ -28,7 +28,6 @@
 
 u32 volatile jiffies = 0;
 u32 jiffy = JIFFY;
-
 u32 volatile beeping = 0;
 
 void start_beep(void) {

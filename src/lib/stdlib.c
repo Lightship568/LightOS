@@ -1,7 +1,12 @@
 #include <lib/stdlib.h>
+#include <lightos/time.h>
+#include <lightos/rtc.h>
 
-void delay(u32 count){
-    while (count--);
+void delay(u32 second){
+    // while (second--);
+    bool flag = true;
+    set_alarm(second, &flag);
+    while(flag);    
 }
 
 void count(void){
