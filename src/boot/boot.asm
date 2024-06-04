@@ -25,8 +25,7 @@ jnz error
 
 jmp 0:0x1008
 
-; 阻塞
-jmp $
+jmp error
 
 read_disk:
 

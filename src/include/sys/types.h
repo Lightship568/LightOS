@@ -14,9 +14,11 @@
 
 #define EOS '\0' // 字符串结尾
 
-#define bool _Bool
-#define true 1
-#define false 0
+#ifndef __cplusplus
+    #define bool _Bool
+    #define true 1
+    #define false 0
+#endif
 
 // 结构体压缩
 #define _packed __attribute__((packed)) 

@@ -1,3 +1,15 @@
+# LightOS Dev Record
+
+LightOS 操作系统开发日志
+
+---
+
+指导 @踌躇月光，https://www.bilibili.com/video/BV1Wr4y1i7kq/。
+
+---
+
+# 开发准备
+
 环境配置
 
 * WSL + Bochs + vsCode
@@ -63,7 +75,7 @@ ata0-master: type=disk, path="LightOS.img", mode=flat
 
 ## Makefile
 
-为了自动化编译内核，需要使用make工具
+为了自动化编译内核，需要使用make
 ```
 boot.bin: boot.asm
     nasm -f bin boot.asm -o boot.bin
@@ -72,7 +84,12 @@ LightOS.img: boot.bin
     dd if=boot.bin of=LightOS.img bs=512 count=1 conv=notrunc
 ```
 
+# Boot
+
+boot.asm -> loader.asm -> head.asm (ld) kernel
+
 ## 硬盘读写
+
 - CHS 模式 / Cylinder / Head / Sector
 - LBA 模式 / Logical Block Address
 
@@ -215,7 +232,7 @@ typedef struct selector
 - **地址寻址方式**：从实模式的段：偏移地址转换为基于GDT/LDT的段选择子和段描述符管理。
 - **分页机制（可选）**：在保护模式下，可以启用分页机制，实现更高级的内存管理。
 
-## 进入内核
+# 进入内核
 
 这个内核不会超过100k，理论上需要寻找内存空间可用地址，实际上bios中断、引导mbr等内容都不重要了，但 BIOS 数据区在系统启动时由 BIOS 初始化，它包含各种硬件和系统状态信息。我先将其256字节拷贝到0x90000位置待用，这个位置基本处于可用内存大块的末尾（`0x7E00`-`0x9FBFF`）。（内核不超过100k即0x19000，之后有用再说）
 
@@ -679,7 +696,7 @@ GPT 给总结了一下
 
 ### 中断上下文
 
-![image-20240602195457164](E:\markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\interrupt_context)
+![image-20240602195457164](E:\markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\interrupt_context.png)
 
 ## 时钟
 
@@ -717,4 +734,8 @@ qemu失败，不知道什么原因，vmware中能够正常发声。考虑到不�
 没什么好说的，就是从cmos读取时间戳bcd转时间就ok。
 
 这里注意与中断相关的要放在 interrupt_init 后面，因为初始化将所有中断都关了。
+
+# 内存管理
+
+![image-20240604113454497](E:\markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\image-20240604113454497.png)
 
