@@ -191,5 +191,5 @@ void console_write(char *buf, u32 count){
 
 void console_init(void){
     console_clear(); 
-    DEBUGK("Console initialize\n"); 
+    DEBUGK("Console initialized\n"); 
 }

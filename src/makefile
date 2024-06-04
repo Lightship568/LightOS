@@ -75,6 +75,8 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/schedule.o	\
 	$(BUILD)/kernel/task.o		\
 	$(BUILD)/kernel/clock.o		\
+	$(BUILD)/kernel/rtc.o		\
+	$(BUILD)/kernel/time.o		\
 
 	$(shell mkdir -p $(dir $@))
 	ld -m elf_i386 -static $^ -o $@ -Ttext $(ENTRYPOINT) 
@@ -108,24 +110,22 @@ bochs: $(BUILD)/LightOS.img
 
 # -s：监听1234端口，-S：GDB没有连接QEMU之前不执行
 # -c 硬盘启动 -m 32M的内存大小
-.PHONY: qemu
-qemu: $(BUILD)/LightOS.img
-	qemu-system-i386 \
+
+QEMU := qemu-system-i386 \
 	-m 32M \
 	-boot c \
-	-hda $<
-	# -drive file=$<,if=ide,index=0,media=disk,format=raw
+	-drive file=$(BUILD)/LightOS.img,if=ide,index=0,media=disk,format=raw	\
 	-audiodev pa,id=hda,server=/run/user/1000/pulse/native \
 	-machine pcspk-audiodev=hda \
-	-device pcspk
+	-rtc base=localtime	\
+
+.PHONY: qemu
+qemu: $(BUILD)/LightOS.img
+	$(QEMU)
 
 .PHONY: qemug
 qemug: $(BUILD)/LightOS.img
-	qemu-system-i386 \
-	-s -S \
-	-m 32M \
-	-boot c \
-	-hda $<
+	$(QEMU) -s -S
 
 $(BUILD)/LightOS.vmdk: $(BUILD)/LightOS.img
 	qemu-img convert -O vmdk $< $@

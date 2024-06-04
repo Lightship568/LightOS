@@ -48,13 +48,6 @@ void clock_handler(int vector) {
 
     jiffies++;
 
-    if (jiffies % 200 == 0){
-        DEBUGK("clock jiffies %d ...\n", jiffies);
-
-        start_beep();
-    }
-    stop_beep();
-
     // timer_wakeup();
 
     // task_t* task = running_task();

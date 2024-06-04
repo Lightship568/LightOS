@@ -10,6 +10,8 @@
 #include <lib/debug.h>
 #include <sys/global.h>
 #include <lightos/interrupt.h>
+#include <lightos/time.h>
+#include <lightos/rtc.h>
 
 extern void clock_init();
 
@@ -17,12 +19,15 @@ char message[] = "hello LightOS!!!111111111111111111111111111111111111111111111\
 
 
 void kernel_init(void){
-    console_init(); 
+    console_init();
+    time_init();
+    rtc_init();
     gdt_init();
     interrupt_init();
     clock_init();
     start_interrupt();
-    printk("\a\n");
+    // printk("\a\n");
+
 
     u32 counter = 0;
     while(true) ;
