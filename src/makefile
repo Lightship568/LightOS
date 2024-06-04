@@ -96,6 +96,8 @@ $(BUILD)/LightOS.img: $(BUILD)/boot/boot.bin $(BUILD)/boot/loader.bin $(BUILD)/s
 	yes | bximage -q -hd=16 -func=create -sectsize=512 -imgmode=flat $@ # ubuntu22.04的bximage -mode 改为 -func
 	dd if=$(BUILD)/boot/boot.bin of=$@ bs=512 count=1 conv=notrunc
 	dd if=$(BUILD)/boot/loader.bin of=$@ bs=512 count=4 seek=1 conv=notrunc # boot.asm 从1开始读4个扇区
+# 测试 system.bin 小于 100k，否则增加下面的 count
+	test -n "$$(find $(BUILD)/system.bin -size -100k)"
 	dd if=$(BUILD)/system.bin of=$@ bs=512 count=200 seek=5 conv=notrunc # 5扇区开始写200个扇区，100k
 
 .PHONY: clean

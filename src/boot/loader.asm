@@ -45,10 +45,6 @@ detect_memory:
     mov si, detecting
     call print
 
-    ; xchg bx, bx
-
-    ; mov byte [0xb8000], 'P'
-
     ; jmp prepare_protected_mode
 
 prepare_protected_mode:
@@ -67,6 +63,8 @@ prepare_protected_mode:
     mov eax, cr0
     or eax, 1
     mov cr0, eax
+
+    
 
     ; 用跳转来刷新缓存，启用保护模式
     jmp dword code_selector:protect_mode
@@ -111,9 +109,7 @@ protect_mode:
     mov dword [esp], 0              ; 读出的数量
     mov dword [esp + 4], 5          ; ecx 初始扇区位置
     mov dword [esp + 8], 0x10000    ; edi 目标内存位置
-    ; BLOCK_SIZE equ 200              ; 一次读取的扇区数量
     
-    ; debug model, termper 20, remember to fix it later!!!!
     BLOCK_SIZE equ 200               ; 一次读取的扇区数量
 
 .read_block:
@@ -135,10 +131,12 @@ protect_mode:
 
     jl .read_block
 
-    mov eax, 0x20240522; 内核魔术
+    mov eax, 0x20240522; 内核魔术 LIGHTOS_MAGIC
     mov ebx, ards_count; ards 数量指针
 
     ; xchg bx, bx
+
+    ; Here to jump to head.asm in kernel!
 
     jmp dword code_selector:0x10000
 

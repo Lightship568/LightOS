@@ -20,7 +20,6 @@ char message[] = "hello LightOS!!!111111111111111111111111111111111111111111111\
 
 
 void kernel_init(void){
-    console_init();
     time_init();
     gdt_init();
     interrupt_init();
