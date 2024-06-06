@@ -13,6 +13,7 @@
 #include <lightos/time.h>
 #include <lightos/rtc.h>
 #include <lib/stdlib.h>
+#include <lightos/memory.h>
 
 extern void clock_init();
 
@@ -23,13 +24,22 @@ void kernel_init(void){
     time_init();
     gdt_init();
     interrupt_init();
+    memory_map_init();
+    
     clock_init();
     rtc_init();
+
+    // memory_test();
+
     start_interrupt();
-    delay(3);
+
+    mapping_init();
+    char* ptr = (char *)0x400000;
+    printk("0x400000: %s\n", ptr);
+
+    ptr = (char *)(0x800000);
+    printk("0x800000: %s\n", ptr);
 
 
-    u32 counter = 0;
-    while(true) ;
-    return;
+    hang();
 } 

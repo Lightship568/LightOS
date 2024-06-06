@@ -12,8 +12,6 @@ _start:
     call console_init
     call memory_init
 
-    jmp $
-
     push L6 ; return address for
     push kernel_init ; return to kernel
     ret

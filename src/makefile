@@ -108,8 +108,7 @@ test: $(BUILD)/LightOS.img
 
 .PHONY: bochs
 bochs: $(BUILD)/LightOS.img
-	# bochs -q -f ../bochs-2.8/bochsrc
-	bochs -q -f ../bochs-2.8/bochsrc
+	bochs -q -f ../bochs/bochsrc
 
 # -s：监听1234端口，-S：GDB没有连接QEMU之前不执行
 # -c 硬盘启动 -m 32M的内存大小

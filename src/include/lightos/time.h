@@ -20,6 +20,7 @@ void time_read_bcd(tm *time);
 void time_read(tm *time);
 time_t mktime(tm *time);
 void localtime(time_t stamp, tm *time);
+// 系统时间初始化，读 CMOS
 void time_init(void);
 
 #endif

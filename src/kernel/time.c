@@ -176,7 +176,7 @@ void time_read(tm* time) {
     century = bcd_to_bin(century);
 }
 
-void time_init() {
+void time_init(void) {
     tm time;
     time_read(&time);
     startup_time = mktime(&time);

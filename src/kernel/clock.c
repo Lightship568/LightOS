@@ -77,6 +77,7 @@ void pit_init(void) {
     outb(PIT_CHAN2_REG, (u8)(BEEP_COUNTER >> 8));
 }
 
+// 时钟初始化，在 interrupt_init 后
 void clock_init(void) {
     pit_init();
     set_interrupt_handler(IRQ_CLOCK, clock_handler);
