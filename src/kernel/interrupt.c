@@ -98,6 +98,11 @@ bool get_interrupt_state(void) {
     );
 }
 
+void set_interrupt_state(bool state){
+    if (state) start_interrupt();
+    else close_interrupt();
+}
+
 void start_interrupt(void) {
     DEBUGK("sti\n");
     asm volatile("sti\n");
