@@ -15,7 +15,7 @@
 #define KERNEL_PAGE_TABLE (PAGE_SIZE * KERNEL_PAGE_DIR_COUNT)    // 0x1000*4 页表起始，数量为 total_pages 个
 #define KERNEL_PAGE_TABLE_COUNT 2   // 页表页数量，2 页映射 8M 给内核
 #define KERNEL_MEM_SIZE (PAGE_SIZE * (PAGE_SIZE / 4) * KERNEL_PAGE_TABLE_COUNT)           // 内核内存大小 8M
-
+#define KERNEL_MAP_BITS 0x7000      // 内核虚拟内存位图的起始位置，手动计算的，紧接着两个页表的布局。
 
 typedef struct page_entry_t
 {
@@ -48,6 +48,5 @@ void memory_map_init(void);
 
 // 初始化内存映射
 void mapping_init(void);
-
 
 #endif

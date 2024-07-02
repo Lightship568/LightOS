@@ -15,10 +15,11 @@
 #include <lib/stdlib.h>
 #include <lightos/memory.h>
 
-extern void clock_init();
+extern void clock_init(); // clock无.h文件
 
 char message[] = "hello LightOS!!!111111111111111111111111111111111111111111111\n\0";
 
+extern void mem_test();
 
 void kernel_init(void){
     time_init();
@@ -28,18 +29,14 @@ void kernel_init(void){
     
     clock_init();
     rtc_init();
-
-    // memory_test();
-
     start_interrupt();
 
+
     mapping_init();
-    char* ptr = (char *)0x400000;
-    printk("0x400000: %s\n", ptr);
+    // char* ptr = (char *)0x7fffff;
+    // printk("0x%p: %s\n", ptr,ptr);
 
-    ptr = (char *)(0x800000);
-    printk("0x800000: %s\n", ptr);
-
+    mem_test();
 
     hang();
 } 

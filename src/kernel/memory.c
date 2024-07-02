@@ -1,3 +1,4 @@
+#include <lib/bitmap.h>
 #include <lib/debug.h>
 #include <lib/stdlib.h>
 #include <lib/string.h>
@@ -12,6 +13,8 @@
 #define PAGE(idx) ((u32)idx << 12)   // 获取 idx 对应的页所在地址
 #define ASSERT_PAGE(addr) assert((addr & 0xfff) == 0)
 #define USED 100  // mem_map 已使用，学 linux 放一个大值
+
+bitmap_t kernel_map;
 
 // BIOS 内存检测结果结构体
 typedef struct ards_t {
@@ -54,8 +57,9 @@ void memory_init(u32 magic, u32 addr) {
     DEBUGK("Memory base 0x%p\n", (u32)memory_base);
     DEBUGK("Memory size 0x%p\n", (u32)memory_size);
 
-    if (memory_size + memory_base < KERNEL_MEM_SIZE){
-        panic("Memory too small, at least %dM needed for kernel!\n", KERNEL_MEM_SIZE/MEMORY_BASE);
+    if (memory_size + memory_base < KERNEL_MEM_SIZE) {
+        panic("Memory too small, at least %dM needed for kernel!\n",
+              KERNEL_MEM_SIZE / MEMORY_BASE);
     }
 
     assert(memory_base == MEMORY_BASE);
@@ -72,6 +76,7 @@ static u32 start_page_idx = 0;  // 可分配物理内存起始地址页索引
 static u8* mem_map;             // 大名鼎鼎的 memory_map!
 static u32 mem_map_pages;       // 物理内存数组占用的页数
 
+// mmap 物理内存数组初始化，顺便占用（1M+mmap占用）的物理地址
 void memory_map_init(void) {
     mem_map = (u8*)memory_base;
 
@@ -88,6 +93,12 @@ void memory_map_init(void) {
         mem_map[i] = USED;
     }
     DEBUGK("Total pages %d free pages %d\n", total_pages, free_pages);
+
+    // 初始化内核虚拟内存位图，需要 8 bits 对齐
+    // 这里需要跳过mmap，但是为了管理方便，选择了将mmap的bitmap置1了
+    u32 length = (IDX(KERNEL_MEM_SIZE) - IDX(MEMORY_BASE)) / 8;
+    bitmap_init(&kernel_map, (u8*)KERNEL_MAP_BITS, length, IDX(MEMORY_BASE));
+    bitmap_scan(&kernel_map, mem_map_pages);
 }
 
 // 获取一页物理内存
@@ -152,8 +163,13 @@ static void entry_init(page_entry_t* entry, u32 index) {
     entry->index = index;
 }
 
-// 初始化内存映射
+// 初始化内存映射，也就是完成最初的页表映射，实现内核物理地址=线性地址
 void mapping_init(void) {
+    /**
+     * 注意，这里虽然初始化了完整的32g也就是四个页目录表，
+     * 但是只映射了第一个pde的前2项到相应页表上了（映射8M给了内核）
+     * 后续需要完善pde的映射，才能够使用完整的32G
+     */
     page_entry_t* pde = (page_entry_t*)KERNEL_PAGE_DIR;
     // 清空前 4 个 pde
     memset(pde, 0, PAGE_SIZE * KERNEL_PAGE_DIR_COUNT);
@@ -165,11 +181,11 @@ void mapping_init(void) {
         memset(pte, 0, PAGE_SIZE);
         entry_init(&pde[i], IDX(pte));
         for (size_t tidx = 0; tidx < (PAGE_SIZE / 4); ++tidx, ++index) {
-            //跳过对0x0的映射，方便后面的空指针触发 PF 来排错。
-            if (index == 0){
+            // 跳过对0x0的映射，方便后面的空指针触发 PF 来排错。
+            if (index == 0) {
                 continue;
             }
-            entry_init(&pte[tidx], index); // IDX(tidx * PAGE_SIZE) == tidx
+            entry_init(&pte[tidx], index);  // IDX(tidx * PAGE_SIZE) == tidx
             mem_map[index] = USED;
         }
     }
@@ -181,4 +197,59 @@ void mapping_init(void) {
     enable_page();
 
     DEBUGK("Mapping initilized\n");
+}
+
+// 从bit_map中分配 count 个连续的页
+static u32 _alloc_page(bitmap_t* map, u32 count) {
+    assert(count > 0);
+
+    int32 index = bitmap_scan(map, count);
+
+    if (index == EOF) {
+        panic("alloc page scan failed");
+    }
+
+    u32 addr = index << 12;
+    DEBUGK("Scan page 0x%p count %d\n", addr, count);
+    return addr;
+}
+
+// 与 _alloc_page 相对，重置相应的页
+static void _reset_page(bitmap_t* map, u32 addr, u32 count) {
+    ASSERT_PAGE(addr);
+    assert(count > 0);
+    u32 index = addr >> 12;
+
+    for (size_t i = 0; i < count; i++) {
+        assert(bitmap_test(map, index + i));
+        bitmap_set(map, index + i, 0);
+    }
+}
+
+// 分配 count 个连续的内核页
+u32 alloc_kpage(u32 count) {
+    assert(count > 0);
+    u32 vaddr = _alloc_page(&kernel_map, count);
+    DEBUGK("Alloc kernel pages 0x%p count %d\n", vaddr, count);
+    return vaddr;
+}
+
+// 释放 count 个连续的内核页
+void free_kpage(u32 vaddr, u32 count) {
+    ASSERT_PAGE(vaddr);
+    assert(count > 0);
+    _reset_page(&kernel_map, vaddr, count);
+    DEBUGK("Free kernel pages 0x%p count %d\n", vaddr, count);
+}
+
+void mem_test() {
+    u32* pages = (u32*)(0x200000);
+    u32 count = 0x6fe;
+    for (size_t i = 0; i < count; i++) {
+        pages[i] = alloc_kpage(1);
+        DEBUGK("0x%x\n", i);
+    }
+    for (size_t i = 0; i < count; i++) {
+        free_kpage(pages[i], 1);
+    }
 }
