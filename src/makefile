@@ -72,7 +72,6 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/interrupt.o	\
 	$(BUILD)/kernel/interrupt_handler.o	\
 	$(BUILD)/lib/stdlib.o		\
-	$(BUILD)/kernel/schedule.o	\
 	$(BUILD)/kernel/task.o		\
 	$(BUILD)/kernel/clock.o		\
 	$(BUILD)/kernel/rtc.o		\

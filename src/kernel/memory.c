@@ -200,6 +200,7 @@ void mapping_init(void) {
 }
 
 // 从bit_map中分配 count 个连续的页
+// todo 还需要设置mmap
 static u32 _alloc_page(bitmap_t* map, u32 count) {
     assert(count > 0);
 
@@ -241,4 +242,3 @@ void free_kpage(u32 vaddr, u32 count) {
     _reset_page(&kernel_map, vaddr, count);
     DEBUGK("Free kernel pages 0x%p count %d\n", vaddr, count);
 }
-

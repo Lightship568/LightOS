@@ -92,6 +92,7 @@ void set_alarm(u32 secs, bool* flag) {
     cmos_read(CMOS_C);               // 读 C 寄存器，以允许 CMOS 中断
 }
 
+// RTC 主要用于定时器，触发后交由 rtc_handler 处理
 void rtc_init(void) {
     // cmos_write(CMOS_B, 0b01000010); // 打开周期中断
 

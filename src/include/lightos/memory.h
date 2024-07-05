@@ -49,4 +49,10 @@ void memory_map_init(void);
 // 初始化内存映射
 void mapping_init(void);
 
+// 分配 count 个连续的内核页
+u32 alloc_kpage(u32 count);
+
+// 释放 count 个连续的内核页
+void free_kpage(u32 vaddr, u32 count);
+
 #endif

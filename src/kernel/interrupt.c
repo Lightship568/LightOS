@@ -104,12 +104,12 @@ void set_interrupt_state(bool state){
 }
 
 void start_interrupt(void) {
-    DEBUGK("sti\n");
+    // DEBUGK("sti\n");
     asm volatile("sti\n");
 }
 
 void close_interrupt(void) {
-    DEBUGK("sti\n");
+    // DEBUGK("cli\n");
     asm volatile("cli\n");
 }
 

@@ -98,7 +98,7 @@ void set_exception_handler(u32 intr, handler_t handler);
 // 注册中断处理函数
 void set_interrupt_handler(u32 irq, handler_t handler);
 
-// 设置 PIC 芯片中断mask，即是否禁用
+// 设置 PIC 芯片中断mask，即是否启用
 void set_interrupt_mask(u32 irq, bool enable);
 
 #endif

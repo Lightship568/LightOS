@@ -41,22 +41,28 @@ void stop_beep(void){
     }
 }
 
+// 时钟中断，每隔 JIFFY （10ms）调用一次
 void clock_handler(int vector) {
     assert(vector == 0x20);
-    send_eoi(vector);  // 发送中断处理结束
 
     jiffies++;
 
     // timer_wakeup();
 
-    // task_t* task = running_task();
-    // assert(task->magic == ONIX_MAGIC);
+    task_t* task = get_current();
+    assert(task->magic == LIGHTOS_MAGIC);
 
-    // task->jiffies = jiffies;
-    // task->ticks--;
-    // if (!task->ticks) {
-    //     schedule();
-    // }
+    task->jiffies = jiffies;
+    task->ticks--;
+
+    // 发送中断处理结束（允许下一次中断到来，否则切进程就没中断了）
+    send_eoi(vector); 
+
+    if (!task->ticks) {
+        task->ticks = task->priority;
+        schedule();
+        DEBUGK("schedule\n");
+    }
 }
 
 extern u32 startup_time;
@@ -77,7 +83,8 @@ void pit_init(void) {
     outb(PIT_CHAN2_REG, (u8)(BEEP_COUNTER >> 8));
 }
 
-// 时钟初始化，在 interrupt_init 后
+// 时钟初始化，在 interrupt_init 后调用
+// 时钟中断每隔 JIFFY 触发一次，交由 clock_handler 处理
 void clock_init(void) {
     pit_init();
     set_interrupt_handler(IRQ_CLOCK, clock_handler);

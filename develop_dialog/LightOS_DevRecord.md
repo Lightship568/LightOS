@@ -8,6 +8,22 @@ LightOS 操作系统开发日志
 
 ---
 
+# 常见 BUG 与处理记录
+
+## 头文件链接时重复定义
+
+在C/C++编程中，使用`#ifndef`、`#define`和`#endif`来防止头文件被多次包含是一个常见的做法。这被称为“include guard”。`#pragma once`也可以实现相同的效果。这些技术能够防止编译期间的重复定义错误，但它们不能防止链接期间的重复定义错误。
+
+因此.h中只能使用函数声明与extern变量声明，并在.c中实现。并且，**重复构建一定要先clean！！！！make不会自动更新已经构建好的东西！！！**
+
+## PF 页错误
+
+设计中，0 地址并未映射，这样可以对空指针访问进行排查。
+
+如果代码运行突然出现PF，估计就是访问了空指针。
+
+
+
 # 开发准备
 
 环境配置
@@ -827,11 +843,11 @@ invlpg
 
 ![highlight](E:\markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\highlight.png)
 
-**值得注意的是，onix选择了0x1000做页目录表，0x2000 0x3000做两个页表，后面的0x4000做内核虚拟内存位图缓存**，参考下图。而在我的LightOS中，我完整的保留了四个页目录，并且参考onix做了两个页表给内核，所以布局应该是
+**值得注意的是，onix选择了0x1000做页目录表，0x2000 0x3000做两个页表，后面的0x4000做内核虚拟内存位图缓存**，参考下图。而在我的LightOS中，我完整的保留了从0开始的四个页目录，并且参考onix做了两个页表给内核，所以布局应该是
 
-0x1000-0x4fff 四个页目录表
-0x5000-0x6fff 两个页表（专门为内核提供 8M 映射）
-0x7000-0x7fff 内核虚拟内存位图缓存
+0x0000-0x3fff 四个页目录表
+0x4000-0x5fff 两个页表（专门为内核提供 8M 映射）
+0x6000-0x6fff 内核虚拟内存位图缓存
 
 ## 简单总结
 
@@ -860,5 +876,72 @@ invlpg
 
 # 创建内核线程
 
+## 硬件任务切换
 
+想了一下，发现目前的Onix进程切换采用的不是硬件进程切换，而是手动jmp到eip的方式，而且没有做task的状态保存，也就是说不可恢复。而硬件进程切换 Hardware Context（Task） Switching需要实现 TSS在GDT中的部署。
+
+```c#
+// Linux 0.11 sched.h
+/*
+ * Entry into gdt where to find first TSS. 0-nul, 1-cs, 2-ds, 3-syscall
+ * 4-TSS0, 5-LDT0, 6-TSS1 etc ...
+ */
+#define FIRST_TSS_ENTRY 4
+#define FIRST_LDT_ENTRY (FIRST_TSS_ENTRY+1)
+#define _TSS(n) ((((unsigned long) n)<<4)+(FIRST_TSS_ENTRY<<3))
+#define _LDT(n) ((((unsigned long) n)<<4)+(FIRST_LDT_ENTRY<<3))
+
+/*
+ *	switch_to(n) should switch tasks to task nr n, first
+ * checking that n isn't the current task, in which case it does nothing.
+ * This also clears the TS-flag if the task we switched to has used
+ * tha math co-processor latest.
+ */
+#define switch_to(n) {\
+struct {long a,b;} __tmp; \
+__asm__("cmpl %%ecx,_current\n\t" \
+	"je 1f\n\t" \
+	"movw %%dx,%1\n\t" \
+	"xchgl %%ecx,_current\n\t" \
+	"ljmp %0\n\t" \
+	"cmpl %%ecx,_last_task_used_math\n\t" \
+	"jne 1f\n\t" \
+	"clts\n" \
+	"1:" \
+	::"m" (*&__tmp.a),"m" (*&__tmp.b), \
+	"d" (_TSS(n)),"c" ((long) task[n])); \
+}
+```
+
+> 在Linux 0.11中，全局描述符表（GDT）包含了操作系统需要的所有段描述符，包括代码段、数据段、任务状态段（TSS）和局部描述符表（LDT）的描述符。我们先看一下Linux 0.11中的GDT布局，然后讨论TSS是否必须放在GDT中才能供CPU进行硬件切换。
+>
+> ### GDT布局
+>
+> Linux 0.11中的GDT布局大致如下：
+>
+> 1. **空描述符**（索引0）
+> 2. **内核代码段**（索引1）
+> 3. **内核数据段**（索引2）
+> 4. **系统调用段**（索引3）
+> 5. **任务0的TSS描述符**（索引4）
+> 6. **任务0的LDT描述符**（索引5）
+> 7. **任务1的TSS描述符**（索引6）
+> 8. **任务1的LDT描述符**（索引7）
+> 9. **更多任务的TSS和LDT描述符**...
+>
+> ### TSS在GDT中的重要性
+>
+> 在x86架构中，硬件任务切换需要TSS描述符来保存和恢复任务状态。TSS描述符必须放在GDT中，以便CPU可以访问它们。这是因为硬件任务切换机制依赖于GDT中的TSS描述符来获取任务状态段的位置和属性。
+>
+> ### 硬件任务切换
+>
+> 硬件任务切换通过以下步骤进行：
+>
+> 1. **任务注册器（Task Register, TR）**：
+>    - TR包含当前任务的TSS选择子，该选择子指向GDT中的TSS描述符。
+>    - 使用`ltr`指令加载新的TSS选择子到TR，告诉CPU当前任务的TSS位置。
+> 2. **TSS描述符**：
+>    - TSS描述符包含TSS的基地址和限制，描述了TSS段的位置和大小。
+> 3. **切换任务**：
+>    - 当使用`ljmp`、`call`或`int`指令切换到新的任务时，CPU会根据新的TSS选择子在GDT中查找TSS描述符，加载新的TSS，并更新TR以指向新的TSS
 

@@ -19,6 +19,11 @@ extern void clock_init(); // clock无.h文件
 
 char message[] = "hello LightOS!!!111111111111111111111111111111111111111111111\n\0";
 
+/**
+ * 测试用
+ */
+extern void task_test();
+
 void kernel_init(void){
     time_init();
     gdt_init();
@@ -27,12 +32,14 @@ void kernel_init(void){
     
     clock_init();
     rtc_init();
-    start_interrupt();
-
 
     mapping_init();
     // char* ptr = (char *)0x7fffff;
     // printk("0x%p: %s\n", ptr,ptr);
+
+    // 不开中断，让进程初始化之后在内部开中断，防止clock_handler找不到进程panic
+    // start_interrupt();
+    task_test();
 
     hang();
 } 
