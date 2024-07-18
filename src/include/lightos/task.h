@@ -75,7 +75,7 @@ typedef struct task_struct{
     u32 ticks;                      // 剩余时间片 
     u32 jiffies;                    // 上次执行时全局时间片
     pid_t pid;                      // 任务ID
-    u32 name[TASK_NAME_LEN];        // 任务名
+    char name[TASK_NAME_LEN];        // 任务名
     u32 uid;                        // 用户ID
     u32 pde;                        // 页目录物理地址
     struct bitmap_t *vmap;          // 进程虚拟内存位图
@@ -94,6 +94,9 @@ void schedule();
 
 // 切换上下文
 void switch_to(int n);
+
+// 系统调用 sys_yield
+void sys_yield(void);
 
 
 // #endif

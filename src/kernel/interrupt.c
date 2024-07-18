@@ -19,7 +19,7 @@ handler_t trap_handler_table[TRAP_TABLE_SIZE];
 // 忽略的中断处理，用于初始化全部中断
 extern void ignore_interrupt();
 
-extern handler_t* syscall_entry(void);
+extern handler_t* syscall_handler(void);
 
 // 外中断相关
 #define PIC_M_CTRL 0x20  // 主片的控制端口
@@ -188,10 +188,6 @@ void outer_interrupt_handler(int vector) {
     DEBUGK("[0x%x] outer interrupt %d...\n", vector, counter++);
 }
 
-void syscall_0(void) {
-    DEBUGK("SYSCALL: 0x80 syscall called...\n");
-}
-
 void default_handler(int vector) {
     panic("Interrupt: [0x%2X] default interrupt\n", vector);
 }
@@ -226,13 +222,13 @@ void idt_init(void) {
 
     // 设置syscall
     gate = &idt[0x80];
-    gate->offset0 = (u32)syscall_entry & 0xffff;
-    gate->offset1 = ((u32)syscall_entry >> 16) & 0xffff;
+    gate->offset0 = (u32)syscall_handler & 0xffff;
+    gate->offset1 = ((u32)syscall_handler >> 16) & 0xffff;
     gate->selector = 1 << 3;  // 代码段
     gate->reserved = 0;
     gate->type = 0b1110;  // 中断门
     gate->segment = 0;    // 系统段
-    gate->DPL = 3;        // 内核态
+    gate->DPL = 3;        // 用户态
     gate->present = 1;    // 有效
 
     idt_ptr.base = (u32)idt;

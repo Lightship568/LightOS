@@ -103,6 +103,7 @@ void switch_to(int n) {
 
     // save_state(&current->tss);
     current = task_list[n];
+    // 还没做TSS的初始化，也就是fork，后面做完fork的系统调用再打开注释
     // load_state(&current->tss);
 
     // 跳转到新任务的 EIP
@@ -125,15 +126,17 @@ void schedule() {
 
 void task1() { //73402
     start_interrupt();
-    printk("A");
     while (true) {
+        printk("A");
+        yield();
     }
 }
 
 void task2() { //73453
     start_interrupt();
-    printk("B");
     while (true) {
+        printk("B");
+        yield();
     }
 }
 
@@ -151,8 +154,8 @@ pid_t task_create(void (*task_ptr)(void),
     // todo stack 要设置一些中断进入内核栈的压入值？
 
     // todo wstrcpy name
-    // assert(sizeof(name) <= 16);
-    // strcpy(task->name, name);
+    assert(sizeof(name) <= 16);
+    strcpy(task->name, name);
 
     u32 stack = (u32)task + PAGE_SIZE;
     task->stack = (u32*)stack;
@@ -177,4 +180,8 @@ void task_test() {
     pid = task_create(task2, "testB", 5, KERNEL_USER);
     current = task_list[pid];
     task2();
+}
+
+void sys_yield(void){
+    schedule();
 }

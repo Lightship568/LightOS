@@ -49,19 +49,19 @@ void clock_handler(int vector) {
 
     // timer_wakeup();
 
-    task_t* task = get_current();
-    assert(task->magic == LIGHTOS_MAGIC);
+    task_t* current = get_current();
+    assert(current->magic == LIGHTOS_MAGIC);
 
-    task->jiffies = jiffies;
-    task->ticks--;
+    current->jiffies = jiffies;
+    current->ticks--;
 
     // 发送中断处理结束（允许下一次中断到来，否则切进程就没中断了）
     send_eoi(vector); 
 
-    if (!task->ticks) {
-        task->ticks = task->priority;
-        schedule();
+    if (!current->ticks) {
+        current->ticks = current->priority;
         DEBUGK("schedule\n");
+        schedule();
     }
 }
 

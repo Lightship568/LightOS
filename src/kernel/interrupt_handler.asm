@@ -16,6 +16,7 @@ TRAP_HANDLER_%1:
     jmp interrupt_entry
 %endmacro
 
+; 中断入口
 interrupt_entry:
     ; 保存寄存器
     push ds
@@ -24,11 +25,16 @@ interrupt_entry:
     push gs
     pusha; pusha / pushad 在32位行为一样，依次入栈EAX,ECX,EDX,EBX,ESP(初始值)，EBP,ESI,EDI.
 
+    ; 找到前面 push %1 压入的 中断向量（4+8=12个u32）
     mov eax, [esp + 12 * 4]
     push eax
-    call [trap_handler_table + eax * 4]
-    add esp, 4
+    call [trap_handler_table + eax * 4] ; 调用中断处理函数，表中存放函数指针
 
+global interrupt_exit
+interrupt_exit:
+
+    ; 对应 push eax / push 0x80，调用结束恢复栈
+    add esp, 4
     ; 恢复寄存器
     popa
     pop gs
@@ -36,13 +42,55 @@ interrupt_entry:
     pop es
     pop ds
 
+    ; 对应 push %1
+    ; 对应 error code 或 push magic
     add esp, 8
     iret
 
-global syscall_entry
-syscall_entry:
-    call syscall_0
-    iret
+bad_sys_call:
+	mov eax, -1
+	iret
+
+extern nr_syscall
+extern syscall_table
+global syscall_handler
+; 系统调用入口
+syscall_handler:
+    ; 验证系统调用号 <64
+    cmp eax, nr_syscall-1
+    ja bad_sys_call
+    
+    ; 与 tarp_handler 保持一致，保证最后可以调用 interrupt_exit
+    push 0x20222202
+    push 0x80
+
+    ; 保存上文寄存器信息
+    push ds
+    push es
+    push fs
+    push gs
+    pusha; 依次入栈EAX,ECX,EDX,EBX,ESP(初始值)，EBP,ESI,EDI.
+
+    push 0x80; 向中断处理函数传递参数中断向量 vector
+
+    ; push ebp; 第六个参数
+    ; push edi; 第五个参数
+    ; push esi; 第四个参数
+    ; push edx; 第三个参数
+    ; push ecx; 第二个参数
+    ; push ebx; 第一个参数
+
+    ; 调用系统调用处理函数，syscall_table 中存储了系统调用处理函数的指针
+    call [syscall_table + eax * 4]
+
+    ; add esp, (6 * 4); 恢复六个参数
+
+    ; 修改栈中 eax 寄存器（pusha进来的），设置系统调用返回值
+    mov dword [esp + 8 * 4], eax
+
+    ; 跳转到中断返回
+    jmp interrupt_exit
+
 
 ; 宏展开，第一个参数为trap编号，第二个参数表示cpu是否自动压入错误码
 TRAP_HANDLER 0x00, 0; divide by zero
