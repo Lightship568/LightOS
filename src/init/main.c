@@ -36,15 +36,20 @@ void kernel_init(void) {
     rtc_init();
 
     mapping_init();
+
+// 页表映射测试
+
     // char* ptr = (char *)0x7fffff;
     // printk("0x%p: %s\n", ptr,ptr);
 
     // 不开中断，让进程初始化之后在内部开中断，防止clock_handler找不到进程panic
 
-    syscall_init();
+    // start_interrupt();
+    // task_test();
 
-    start_interrupt();
-    task_test();
+// 测试 syscall
+
+    // syscall_init();
     // u32 ret = 0;
     // asm volatile(
     //     "int $0x80\n"       // 触发系统调用

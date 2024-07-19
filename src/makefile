@@ -79,6 +79,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/memory.o	\
 	$(BUILD)/lib/bitmap.o	\
 	$(BUILD)/kernel/syscall.o	\
+	$(BUILD)/lib/list.o	\
 
 	$(shell mkdir -p $(dir $@))
 	ld -m elf_i386 -static $^ -o $@ -Ttext $(ENTRYPOINT) 
