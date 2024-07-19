@@ -8,6 +8,7 @@
 #include <sys/assert.h>
 #include <sys/global.h>
 #include <sys/types.h>
+#include <lib/list.h>
 
 #define task1_base 0x1000
 #define task2_base 0x2000
@@ -184,4 +185,12 @@ void task_test() {
 
 void sys_yield(void){
     schedule();
+}
+
+void sys_block(task_t *task, list_t *blist, task_state_t state){
+    
+
+}
+void sys_unblock(task_t *task){
+    
 }
