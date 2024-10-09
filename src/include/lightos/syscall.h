@@ -76,4 +76,8 @@ typedef enum syscall_t
     SYS_NR_MKFS = NR_SYSCALL - 1,
 } syscall_t;
 
+
+void yield(void);
+
+
 #endif

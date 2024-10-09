@@ -710,17 +710,17 @@ GPT 给总结了一下
 
 ### eflags
 
-![eflags](E:\markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\eflags.png)
+![eflags](.\markdown_img\eflags.png)
 
 8086中采用了两片8259a可编程控制芯片，每片管理8个中断源，两片级联可以控制64个中断向量，但是 PC/AT 系列兼容机最多能够管理15个中断向量。主片端口0x20，从片0xa0。具体原理可参考onix 032 外中断原理，真的很有意思，这才是计算机科学。
 
-![8259a](E:\markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\8259a.png)
+![8259a](.\markdown_img\8259a.png)
 
 **sti 和 cli 都是针对外中断的，内中断和异常都是 cpu 片内事件，不受 eflags 中的 if 位控制。**
 
 ### 中断上下文
 
-![image-20240602195457164](E:\markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\interrupt_context.png)
+![image-20240602195457164](.\markdown_img\interrupt_context.png)
 
 ## 时钟
 
@@ -761,7 +761,7 @@ qemu失败，不知道什么原因，vmware中能够正常发声。考虑到不�
 
 # 内存管理
 
-![image-20240604113454497](E:\markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\image-20240604113454497.png)
+![image-20240604113454497](.\markdown_img\image-20240604113454497.png)
 
 ## ards
 
@@ -818,7 +818,7 @@ qemu失败，不知道什么原因，vmware中能够正常发声。考虑到不�
 
 ## 页表
 
-![image-20240605222254688](E:\markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\页表.png)
+![image-20240605222254688](.\markdown_img\页表.png)
 
 已经学了无数遍了，应该大概可能记得很熟了吧()。
 
@@ -849,7 +849,7 @@ mov cr3, eax
 invlpg
 ```
 
-![highlight](E:\markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\highlight.png)
+![highlight](.\markdown_img\highlight.png)
 
 **值得注意的是，onix选择了0x1000做页目录表，0x2000 0x3000做两个页表，后面的0x4000做内核虚拟内存位图缓存**，参考下图。而在我的LightOS中，我完整的保留了从0开始的四个页目录，并且参考onix做了两个页表给内核，所以布局应该是
 
@@ -979,6 +979,16 @@ __asm__("cmpl %%ecx,_current\n\t" \
 
 非常神奇，后面实现了系统调用发现一旦输出多了就会疯狂“重启”，不一定是重启但是有重新启动的现象，并且重启后随机时间发生 PF。正常不切换进程就没有问题，还是进程的问题，等后面实现了fork之后再重新理一遍吧。
 
+### 新进度
+
+https://wiki.osdev.org/Context_Switching
+
+根据OSDEV的描述，现代的操作系统出于性能和可移植性的原因，都会采用软件上下文切换的方式。
+
+**自动重启的原因找到了，因为load的过程出了问题，导致esp和ebp在切换上下文时候被赋值为0，一旦进入新进程函数需要分配局部变量时，esp已经为0，再减就溢出到0xFFFFFFFF，估计是qemu检测到了异常，所以qemu自动重启了。**
+
+此外就是，系统初始化的内核栈与新分配的两个进程不一致，但是是通过进程调用来开始执行第一个进程的，因此导致目前的栈与进程A并不相符，所以只能暂时性的将save删掉了，目前没有办法从yield或者抢占处继续执行该进程。
+
 # 系统调用
 
 之前已经实现了一部分，先是设置 IDT 表的 0x80 为 syscall，之后在 syscall 中判断 nr_syscall 没超过范围（这里因为C中的宏无法在汇编中extern，所以重复定义了一个u32，不太精美），之后转交给系统调用来处理，结束后返回 eax 作为返回值。
@@ -992,4 +1002,12 @@ __asm__("cmpl %%ecx,_current\n\t" \
 至于任务阻塞，linux0.11 的实现是，在任务的函数中设置了一个局部变量 tmp，用其链接current作为一个栈上链表（大致思路）。在 ONIX 中，在 pcb 中加入了链表数据结构，使得pcb可以连成链。
 
 但是目前没有这个需求，完成了用户态和 fork 后，遇到了阻塞功能后再补上。安排的进度不合理，先跳过吧
+
+# IDLE Task
+
+Process 0，但是没法测试，实际上实现也比较容易，就是不停的调用schedule就行，也跳过。
+
+
+
+
 

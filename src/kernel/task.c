@@ -9,9 +9,7 @@
 #include <sys/global.h>
 #include <sys/types.h>
 #include <lib/list.h>
-
-#define task1_base 0x1000
-#define task2_base 0x2000
+#include <lightos/syscall.h>
 
 task_t* task_list[NR_TASKS] = {0};
 task_t* current = (task_t*)NULL;
@@ -40,75 +38,31 @@ pid_t kfork() {
     return pid;
 }
 
-// todo 实现硬件任务切换（注册tss到gdt中实现硬件切换）
-// extern descriptor_t gdt[GDT_SIZE];
-
 /**
- * 下面先实现手动切换tss功能
+ * 软件实现上下文切换功能
  */
-void save_state(tss_t* tss) {
-    u32 eflags, eip;
-    asm volatile(
-        "movl %%esp, %0\n"
-        "movl %%ebp, %1\n"
-        "pushfl\n"
-        "popl %2\n"
-        "movl %%eax, %3\n"
-        "movl %%ebx, %4\n"
-        "call 1f\n"     // 调用标签1，保存EIP
-        "1: popl %5\n"  // 将返回地址弹出到EIP变量中
-        : "=m"(tss->esp), "=m"(tss->ebp), "=r"(eflags), "=m"(tss->eax),
-          "=m"(tss->ebx), "=r"(eip)
-        :
-        : "memory");
-    tss->eflags = eflags;
-    tss->eip = eip;
 
-    asm volatile(
-        "movl %%ecx, %0\n"
-        "movl %%edx, %1\n"
-        "movl %%esi, %2\n"
-        "movl %%edi, %3\n"
-        : "=m"(tss->ecx), "=m"(tss->edx), "=m"(tss->esi), "=m"(tss->edi)
-        :
-        : "memory");
-}
-
-// 加载新任务状态
-void load_state(tss_t* tss) {
-    asm volatile(
-        "movl %0, %%esp\n"
-        "movl %1, %%ebp\n"
-        "pushl %2\n"
-        "popfl\n"
-        "movl %3, %%eax\n"
-        "movl %4, %%ebx\n"
-        :
-        : "m"(tss->esp), "m"(tss->ebp), "r"(tss->eflags), "m"(tss->eax),
-          "m"(tss->ebx)
-        : "memory");
-    asm volatile(
-        "movl %0, %%ecx\n"
-        "movl %1, %%edx\n"
-        "movl %2, %%esi\n"
-        "movl %3, %%edi\n"
-        :
-        : "m"(tss->ecx), "m"(tss->edx), "m"(tss->esi), "m"(tss->edi)
-        : "memory");
-}
+extern void save_state(struct tss_t *tss);
+extern void load_state(struct tss_t *tss);
 
 void switch_to(int n) {
     assert(n >= 0 && n < NR_TASKS && task_list[n] != NULL);
     if (current == task_list[n])
         return;
 
+    /**
+     * 系统初始化的内核栈与新分配的两个进程不一致(0x10000和alloc_kpage的0x11000)
+     * 但是是通过进程调用来开始执行第一个进程的，因此导致目前的栈与进程A并不相符
+     * 只能暂时性的将save删掉了，目前没有办法从yield或者抢占处继续执行该进程。
+     * 等到move_to_user搞定了，就可以打开注释了
+     */
+
     // save_state(&current->tss);
     current = task_list[n];
-    // 还没做TSS的初始化，也就是fork，后面做完fork的系统调用再打开注释
-    // load_state(&current->tss);
+    load_state(&current->tss);
 
     // 跳转到新任务的 EIP
-    asm volatile("jmp *%0\n" : : "m"(current->tss.eip));
+    // asm volatile("jmp *%0\n" : : "m"(current->tss.eip));
 }
 
 void schedule() {
@@ -122,22 +76,30 @@ void schedule() {
             switch_to(n);
         }
     }
-    panic("NO READY TASK??\n");
+    switch_to(0);
+    // panic("NO READY TASK??\n");
 }
+#define INTERVEL 10000000
 
 void task1() { //73402
     start_interrupt();
     while (true) {
-        printk("A");
-        yield();
+        for(int j = 0; j < 5; ++j){
+            printk("A");
+            for (int i = 0; i < INTERVEL; ++i);
+        }
+        // yield();
     }
 }
 
 void task2() { //73453
     start_interrupt();
     while (true) {
-        printk("B");
-        yield();
+        for(int j = 0; j < 5; ++j){
+            printk("B");
+            for (int i = 0; i < INTERVEL; ++i);
+        }
+        // yield();
     }
 }
 
@@ -177,8 +139,8 @@ pid_t task_create(void (*task_ptr)(void),
 
 void task_test() {
     pid_t pid;
-    pid = task_create(task1, "testA", 5, KERNEL_USER);
-    pid = task_create(task2, "testB", 5, KERNEL_USER);
+    pid = task_create(task1, "testA", 50, KERNEL_USER);
+    pid = task_create(task2, "testB", 50, KERNEL_USER);
     current = task_list[pid];
     task2();
 }
@@ -192,5 +154,5 @@ void sys_block(task_t *task, list_t *blist, task_state_t state){
 
 }
 void sys_unblock(task_t *task){
-    
+
 }

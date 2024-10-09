@@ -43,21 +43,15 @@ void kernel_init(void) {
     // printk("0x%p: %s\n", ptr,ptr);
 
     // 不开中断，让进程初始化之后在内部开中断，防止clock_handler找不到进程panic
-
     // start_interrupt();
-    // task_test();
 
-// 测试 syscall
+// 测试 syscall 和 task
 
-    // syscall_init();
-    // u32 ret = 0;
-    // asm volatile(
-    //     "int $0x80\n"       // 触发系统调用
-    //     : "=a"(ret)  // 输出操作数，将eax的值存储到ret变量中
-    //     : "a"(0x1)   // 输入操作数，系统调用号
-    //     : "memory");
+    syscall_init();
+    task_test();
 
     // DEBUGK("return value is %d\n", ret);
 
-    hang();
+    // move_to_user_mode();
+    hang(); 
 }

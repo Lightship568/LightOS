@@ -58,9 +58,8 @@ void clock_handler(int vector) {
     // 发送中断处理结束（允许下一次中断到来，否则切进程就没中断了）
     send_eoi(vector); 
 
-    if (!current->ticks) {
+    if (current->ticks <= 0) {
         current->ticks = current->priority;
-        DEBUGK("schedule\n");
         schedule();
     }
 }
