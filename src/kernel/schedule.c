@@ -1,15 +1,14 @@
 #include <sys/global.h>
 
-void save_state(struct tss_t *tss) {
+void save_state(struct tss_t *tss, void *eip) {
     asm volatile (
         "mov %%esp, %0\n"        // 保存当前 esp 到 tss->esp
         "mov %%ebp, %1\n"        // 保存当前 ebp 到 tss->ebp
-        "call 1f\n"              // 使用 call 来获取 eip
-        "1: pop %2\n"            // 保存 eip 到 tss->eip
         : "=m"(tss->esp), "=m"(tss->ebp), "=m"(tss->eip)  // 输出约束
         :                        // 输入约束为空
         : "memory"               // 告诉编译器汇编代码会修改内存
     );
+    tss->eip = (u32)eip;             // 手动保存 eip
 }
 
 void load_state(struct tss_t *tss) {
