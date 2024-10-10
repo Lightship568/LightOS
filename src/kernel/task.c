@@ -177,7 +177,7 @@ void sys_block(task_t *task, list_t *blist, task_state_t state){
 
 }
 void sys_unblock(task_t *task){
-    
+
 }
 
 void sys_sleep(u32 ms){
@@ -185,6 +185,9 @@ void sys_sleep(u32 ms){
     list_node_t* current_p = &current->node;
     task_t* target_task;
     list_node_t* anchor = &sleep_list.tail;
+
+    // 没有被阻塞，才可被休眠
+    assert(current->node.next == NULL && current->node.prev == NULL);
 
     current->ticks = ms / jiffy;
     current->jiffies = current->jiffies + current->ticks;
