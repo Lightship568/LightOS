@@ -78,6 +78,7 @@ typedef enum syscall_t
 
 
 void yield(void);
+void sleep(u32 ms);
 
 
 #endif

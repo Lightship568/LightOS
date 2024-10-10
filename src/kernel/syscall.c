@@ -18,9 +18,23 @@ static _inline u32 _syscall0(u32 nr){
     return ret;
 }
 
+static _inline u32 _syscall1(u32 nr, u32 arg1){
+    u32 ret;
+    asm volatile(
+        "int $0x80\n"
+        : "=a"(ret)
+        : "a"(nr), "b"(arg1)
+        : "memory");
+    return ret;
+}
+
 // 内核的系统调用封装
 void yield(void){
     _syscall0(SYS_NR_YIELD);
+}
+
+void sleep(u32 ms){
+    _syscall1(SYS_NR_SLEEP, ms);
 }
 
 // 默认系统调用处理，返回-1
@@ -35,4 +49,5 @@ void syscall_init(void){
         syscall_table[i] = sys_default;
     }
     syscall_table[SYS_NR_YIELD] = sys_yield;
+    syscall_table[SYS_NR_SLEEP] = sys_sleep;
 }

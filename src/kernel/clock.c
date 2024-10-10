@@ -48,6 +48,9 @@ void clock_handler(int vector) {
     jiffies++;
 
     // timer_wakeup();
+    
+    // 唤醒睡眠进程
+    task_wakeup();
 
     task_t* current = get_current();
     assert(current->magic == LIGHTOS_MAGIC);

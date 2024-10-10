@@ -13,6 +13,10 @@
 
 task_t* task_list[NR_TASKS] = {0};
 task_t* current = (task_t*)NULL;
+extern u32 volatile jiffies; // clock.c 时间片数
+extern u32 jiffy; // clock.c 时钟中断的ms间隔
+
+static list_t sleep_list; //睡眠任务链表 
 
 task_t* get_current() {
     return current;
@@ -67,8 +71,7 @@ void switch_to(int n) {
 
 void schedule() {
     // 获取 current 的 pid
-    pid_t n = current->pid;
-    n += 1;
+    pid_t n = current->pid + 1;
     for (int i = 0; i < NR_TASKS; ++i, ++n) {
         n %= NR_TASKS;
         if (task_list[n] != NULL && task_list[n]->ticks &&
@@ -100,6 +103,21 @@ void task2() { //73453
             for (int i = 0; i < INTERVEL; ++i);
         }
         // yield();
+    }
+}
+
+void task_sleep_test(){
+    while(true){
+        printk("taskB try to sleep 1000 ms!\n");
+        sleep(1000);
+    }
+}
+
+void idle(){
+    while (true){
+        start_interrupt();
+        asm volatile("hlt\n");
+        schedule();
     }
 }
 
@@ -137,12 +155,17 @@ pid_t task_create(void (*task_ptr)(void),
     return pid;
 }
 
-void task_test() {
+void task_init(void){
+    list_init(&sleep_list);
+}
+
+void task_test(void) {
     pid_t pid;
-    pid = task_create(task1, "testA", 50, KERNEL_USER);
-    pid = task_create(task2, "testB", 50, KERNEL_USER);
-    current = task_list[pid];
-    task2();
+    pid = task_create(idle, "idle", 1, KERNEL_USER);
+    pid = task_create(task_sleep_test, "testB", 5, KERNEL_USER);
+
+    current = task_list[0];
+    idle();
 }
 
 void sys_yield(void){
@@ -154,5 +177,47 @@ void sys_block(task_t *task, list_t *blist, task_state_t state){
 
 }
 void sys_unblock(task_t *task){
+    
+}
 
+void sys_sleep(u32 ms){
+    assert(!get_interrupt_state()); // 确保是系统调用进来中断关闭的状态
+    list_node_t* current_p = &current->node;
+    task_t* target_task;
+    list_node_t* anchor = &sleep_list.tail;
+
+    current->ticks = ms / jiffy;
+    current->jiffies = current->jiffies + current->ticks;
+
+    // 基于ticks的插入排序
+    for (list_node_t* p = sleep_list.head.next; p != &sleep_list.tail; p = p->next){
+        target_task = element_entry(task_t, node, p);
+        if (current->jiffies < target_task->jiffies){
+            anchor = p;
+            break;
+        }
+    }
+    list_insert_before(anchor, current_p);
+
+    current->state = TASK_SLEEPING;
+    schedule();
+}
+
+// 非系统调用，但与sleep对应
+void task_wakeup(void){
+    task_t* target_task;
+    list_node_t* p = sleep_list.head.next;
+    list_node_t* tmp_p;
+    for (;p != &sleep_list.tail;){
+        task_t* target_task = element_entry(task_t, node, p);
+        // 插入排序的，找目标jiffies <= 当前实际值的，证明要唤醒
+        if (target_task->jiffies > jiffies){
+            break;
+        }
+        target_task->ticks = target_task->priority;
+        target_task->state = TASK_READY;
+        tmp_p = p->next;
+        list_remove(p);
+        p = tmp_p;
+    }
 }

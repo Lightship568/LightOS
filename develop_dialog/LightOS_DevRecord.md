@@ -1007,7 +1007,11 @@ https://wiki.osdev.org/Context_Switching
 
 Process 0，但是没法测试，实际上实现也比较容易，就是不停的调用schedule就行，也跳过。
 
+视频中的idle比较抽象，居然用到了hlt，等待外部中断？clock的时钟中断可以触发程序的调度
 
+# sleep睡眠唤醒
 
+int 80h 是32位x86的系统调用方式。同样通过ax传递调用号，参数传递顺序是：***ebx，ecx，edx，esi，edi***
 
+休眠调用sleep时将该进程 **插入排序** 添加到 sleep_list 链表中，将预计唤醒时间保存在 task->jiffies 中，并在每次 clock 中断时触发链表的检查，若有唤醒程序，则将其状态置 READY 即可。
 

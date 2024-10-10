@@ -15,6 +15,7 @@
 #include <sys/assert.h>
 #include <sys/global.h>
 #include <sys/types.h>
+#include <lightos/task.h>
 
 extern void clock_init();  // clock无.h文件
 
@@ -24,7 +25,7 @@ char message[] =
 /**
  * 测试用
  */
-extern void task_test();
+extern void schedule();
 
 void kernel_init(void) {
     time_init();
@@ -48,10 +49,15 @@ void kernel_init(void) {
 // 测试 syscall 和 task
 
     syscall_init();
+    task_init();
     task_test();
 
     // DEBUGK("return value is %d\n", ret);
 
     // move_to_user_mode();
+
+    // for (;;){
+    //     schedule();
+    // }
     hang(); 
 }

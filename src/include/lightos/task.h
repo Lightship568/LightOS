@@ -1,6 +1,6 @@
 #pragma
-// #ifndef LIGHTOS_TASK_H
-// #define LIGHTOS_TASK_H
+#ifndef LIGHTOS_TASK_H
+#define LIGHTOS_TASK_H
 
 /**
  * 进程管理
@@ -8,6 +8,7 @@
 
 #include <sys/types.h>
 #include <sys/global.h>
+#include <lib/list.h>
 
 #define NR_TASKS 64
 
@@ -75,9 +76,10 @@ typedef struct task_struct{
     u32 ticks;                      // 剩余时间片 
     u32 jiffies;                    // 上次执行时全局时间片
     pid_t pid;                      // 任务ID
-    char name[TASK_NAME_LEN];        // 任务名
+    char name[TASK_NAME_LEN];       // 任务名
     u32 uid;                        // 用户ID
     u32 pde;                        // 页目录物理地址
+    list_node_t node;               // 链表
     struct bitmap_t *vmap;          // 进程虚拟内存位图
     struct tss_t tss;               // TSS
     u32 magic;                      // 检测内核栈溢出（溢出到 PCB 就寄了）
@@ -85,6 +87,8 @@ typedef struct task_struct{
 
 extern task_t* task_list[NR_TASKS];
 extern task_t* current;
+
+void task_init(void);
 
 // 返回 current
 task_t *get_current();
@@ -98,5 +102,11 @@ void switch_to(int n);
 // 系统调用 sys_yield
 void sys_yield(void);
 
+// 系统调用 sys_sleep
+void sys_sleep(u32 ms);
 
-// #endif
+// 非系统调用，但与sleep对应，被clock调用
+void task_wakeup();
+
+
+#endif
