@@ -10,6 +10,7 @@
 #include <sys/assert.h>
 #include <sys/global.h>
 #include <sys/types.h>
+#include <lib/mutex.h>
 
 task_t* task_list[NR_TASKS] = {0};
 task_t* current = (task_t*)NULL;
@@ -17,6 +18,8 @@ extern u32 volatile jiffies;  // clock.c 时间片数
 extern u32 jiffy;             // clock.c 时钟中断的ms间隔
 
 static list_t sleep_list;  // 睡眠任务链表
+static list_t block_list;  // 阻塞任务链表
+static mutex_t mutex_test; // 测试用的互斥量
 
 task_t* get_current() {
     return current;
@@ -67,8 +70,9 @@ void schedule() {
         n %= NR_TASKS;
         if (task_list[n] != NULL && task_list[n]->ticks &&
             task_list[n]->state == TASK_READY) {
-            switch_to(n);
-            return;
+                task_list[n]->jiffies = jiffies;
+                switch_to(n);
+                return;
         }
     }
     switch_to(0);
@@ -100,8 +104,23 @@ void task2() {  // 73453
 void task_sleep_test() {
     int i = 0;
     while (true) {
-        printk("taskB try to sleep 1000 ms!, times %d\n", ++i);
+        start_interrupt();
+        mutex_lock(&mutex_test);
+        printk("taskB get mutex and trying to sleep 1000 ms!, times %d\n", ++i);
         sleep(1000);
+        printk("taskB wakeup, release mutex\n");
+        mutex_unlock(&mutex_test);
+    }
+}
+void task_sleep_test2() {
+    int i = 0;
+    while (true) {
+        start_interrupt();
+        mutex_lock(&mutex_test);
+        printk("taskC get mutex and trying to sleep 1000 ms!, times %d\n", ++i);
+        sleep(1000);
+        printk("taskC wakeup, release mutex\n");
+        mutex_unlock(&mutex_test);
     }
 }
 
@@ -147,17 +166,14 @@ pid_t task_create(void (*task_ptr)(void),
     return pid;
 }
 
-void task_init(void) {
-    list_init(&sleep_list);
-}
-
-void task_test(void) {
+void task_setup(void) {
     pid_t pid;
     pid = task_create(idle, "idle", 1, KERNEL_USER);
-    pid = task_create(task_sleep_test, "testB", 5, KERNEL_USER);
+    pid = task_create(task_sleep_test, "testB", 50, KERNEL_USER);
+    pid = task_create(task_sleep_test2, "testC", 50, KERNEL_USER);
 
     current = task_list[0];
-    // 写入进程0栈信息
+    // 写入进程0的栈信息
     asm volatile(
         "mov %0, %%esp\n"                               // 恢复 esp
         "mov %1, %%ebp\n"                               // 恢复 ebp
@@ -168,6 +184,14 @@ void task_test(void) {
     idle();
 }
 
+void task_init(void) {
+    list_init(&sleep_list);
+    list_init(&block_list);
+    mutex_init(&mutex_test);
+    task_setup();
+}
+
+
 void sys_yield(void) {
     schedule();
 }
@@ -176,7 +200,7 @@ void sys_block(task_t* task, list_t* blist, task_state_t state) {}
 void sys_unblock(task_t* task) {}
 
 void sys_sleep(u32 ms) {
-    assert(!get_interrupt_state());  // 确保是系统调用进来中断关闭的状态
+    assert(!get_interrupt_state());  // 确保是系统调用进来关中断的状态
     list_node_t* current_p = &current->node;
     task_t* target_task;
     list_node_t* anchor = &sleep_list.tail;
@@ -204,6 +228,7 @@ void sys_sleep(u32 ms) {
 
 // 非系统调用，但与sleep对应
 void task_wakeup(void) {
+    assert(!get_interrupt_state());  // 确保是clock进入的关中断状态
     task_t* target_task;
     list_node_t* p = sleep_list.head.next;
     list_node_t* tmp_p;
@@ -219,4 +244,35 @@ void task_wakeup(void) {
         list_remove(p);
         p = tmp_p;
     }
+}
+
+void task_block(task_t* task, list_t* waiting_list, task_state_t task_state){
+    // 应该需要关中断，否则链表操作可能会崩，这里没法再使用互斥量了，否则catch-22
+    bool intr = get_interrupt_state();
+    set_interrupt_state(false);
+
+    list_pushback(waiting_list, &task->node);
+    task->state = task_state;
+    if (current == task){
+        schedule();
+    }
+
+    set_interrupt_state(intr);
+}
+
+void task_unblock(list_t* waiting_list){
+    // 中断处理同上
+    bool intr = get_interrupt_state();
+    task_t* task;
+    list_node_t* pnode;
+    set_interrupt_state(false);
+    
+    if (!list_empty(waiting_list)){
+        pnode = list_pop(waiting_list);
+        task = element_entry(task_t, node, pnode);
+        task->state = TASK_READY;
+        yield();
+    }
+
+    set_interrupt_state(intr);
 }

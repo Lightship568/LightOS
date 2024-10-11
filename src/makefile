@@ -81,6 +81,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/syscall.o	\
 	$(BUILD)/lib/list.o			\
 	$(BUILD)/kernel/schedule.o	\
+	$(BUILD)/lib/mutex.o		\
 
 	$(shell mkdir -p $(dir $@))
 	ld -m elf_i386 -static $^ -o $@ -Ttext $(ENTRYPOINT) 

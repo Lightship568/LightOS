@@ -50,7 +50,6 @@ void kernel_init(void) {
 
     syscall_init();
     task_init();
-    task_test();
 
     // DEBUGK("return value is %d\n", ret);
 
