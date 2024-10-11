@@ -2,6 +2,7 @@
 #include <lib/io.h>
 #include <lib/string.h>
 #include <lib/debug.h>
+#include <lib/mutex.h>
 
 #define CRT_ADDR_REG 0x3D4 // CRT(6845)索引寄存器
 #define CRT_DATA_REG 0x3D5 // CRT(6845)数据寄存器
@@ -39,6 +40,9 @@ static u32 pos;     // 当前光标的内存位置
 static u32 x, y;    // 当前光标的坐标（80x25）
 static u8 attr = 7; // 字符样式
 static u16 erase = 0x0720;   //删除后清空为空格
+
+// 临界区互斥量
+static mutex_t mutex_console;
 
 // 获得当前指针的开始位置
 static void get_screen(void){
@@ -132,6 +136,9 @@ void console_clear(void){
 
 extern void start_beep(void);
 void console_write(char *buf, u32 count){
+    // 进入临界区
+    mutex_lock(&mutex_console);
+
     if (count == -1){
         count = strlen(buf);
     }
@@ -187,9 +194,13 @@ void console_write(char *buf, u32 count){
         }
         set_cursor();
     }
+
+    // 退出临界区
+    mutex_unlock(&mutex_console);
 }
 
 void console_init(void){
     console_clear(); 
+    mutex_init(&mutex_console);
     DEBUGK("Console initialized\n"); 
 }

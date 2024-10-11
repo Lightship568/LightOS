@@ -1029,5 +1029,30 @@ task_list[n]->jiffies = jiffies;
 
 # mutex&signel 互斥与信号量
 
-尚未考虑进程饿死的情况，等待队列也设置为了FIFO
+尚未考虑进程饿死的情况，等待队列也设置为了FIFO。
 
+while的设计非常艺术，减少了关闭中断的上下文长度，见注释
+
+```c
+void mutex_lock(mutex_t* mutex){
+    // 个人认为这里不需要关中断，因为一旦互斥量释放，只会选择一个等待进程进行唤醒
+    // 此时一定可以 inc 获得该互斥量，而多线程情况（新任务未阻塞且同时争抢互斥量）关中断也无效
+    task_t* current = get_current();
+    
+    while(mutex->value){
+        task_block(current, &mutex->waiters, TASK_BLOCKED);
+    }
+    mutex->value++; //inc 原子操作
+}
+
+void mutex_unlock(mutex_t* mutex){
+    // 解锁也不需要关中断，一种情况：mutex--后瞬间被中断，新任务又恰好占用mutex，
+    // 调度时阻塞任务被恢复会再次判断mutex是否被占用，并再次进入阻塞。
+    task_t* current = get_current();
+    
+    mutex->value--;
+    task_unblock(&mutex->waiters);
+}
+```
+
+此外需要修复console的临界区操作，若在操作console打印时候发生中断，且另一个程序也尝试写console，则可能会导致显示异常，因此需要通过mutex设置临界区。
