@@ -107,7 +107,7 @@ void task_sleep_test() {
         start_interrupt();
         mutex_lock(&mutex_test);
         printk("taskB get mutex and trying to sleep 1000 ms!, times %d\n", ++i);
-        // sleep(1000);
+        sleep(1000);
         printk("taskB wakeup, release mutex\n");
         mutex_unlock(&mutex_test);
     }
@@ -118,7 +118,7 @@ void task_sleep_test2() {
         start_interrupt();
         mutex_lock(&mutex_test);
         printk("taskC get mutex and trying to sleep 1000 ms!, times %d\n", ++i);
-        // sleep(1000);
+        sleep(1000);
         printk("taskC wakeup, release mutex\n");
         mutex_unlock(&mutex_test);
     }

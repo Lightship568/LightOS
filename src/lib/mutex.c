@@ -12,17 +12,29 @@ void mutex_init(mutex_t* mutex){
     list_init(&mutex->waiters);
 }
 
-void mutex_lock(mutex_t* mutex){
-    // 个人认为这里不需要关中断，因为一旦互斥量释放，只会选择一个等待进程进行唤醒
-    // 此时一定可以 inc 获得该互斥量，而多线程情况（新任务未阻塞且同时争抢互斥量）关中断也无效
+void mutex_lock(mutex_t* mutex) {
     task_t* current = get_current();
-    
-    while(mutex->value){
-        // printk("Task %s blocking...\n", current->name);
+    int expected = 0;
+    int new_value = 1;
+
+    // 若想不关中断，则必须让“检查+获取锁”是原子操作。
+    // 否则若中断于二者中间，此时调度到其他程序就会出现同时有两个程序操作临界区的情况发生。
+    while (true) {
+        asm volatile(
+            "lock cmpxchg %2, %1"
+            : "=a"(expected), "+m"(mutex->value)
+            : "r"(new_value), "0"(expected)
+            : "memory");
+
+        // 如果cmpxchg成功，则mutex->value已经从0变成了1
+        if (expected == 0) {
+            break;  // 成功获取锁，退出循环
+        }
+
+        // 如果未成功获取锁，任务进入阻塞
         task_block(current, &mutex->waiters, TASK_BLOCKED);
+        expected = 0;  // 重置expected为0，用于下次比较
     }
-    // printk("Task %s get mutex\n", current->name);
-    mutex->value++; //inc 原子操作
 }
 
 void mutex_unlock(mutex_t* mutex){
@@ -30,7 +42,12 @@ void mutex_unlock(mutex_t* mutex){
     // 调度时阻塞任务被恢复会再次判断mutex是否被占用，并再次进入阻塞。
     task_t* current = get_current();
     
-    // printk("Task %s release mutex\n", current->name);
-    mutex->value--;
+    // 直接减小mutex->value的值，解锁
+    asm volatile(
+        "lock dec %0"
+        : "+m"(mutex->value)
+        : 
+        : "memory");
+
     task_unblock(&mutex->waiters);
 }

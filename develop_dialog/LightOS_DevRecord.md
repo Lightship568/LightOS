@@ -1037,6 +1037,7 @@ while的设计非常艺术，减少了关闭中断的上下文长度，见注释
 void mutex_lock(mutex_t* mutex){
     // 个人认为这里不需要关中断，因为一旦互斥量释放，只会选择一个等待进程进行唤醒
     // 此时一定可以 inc 获得该互斥量，而多线程情况（新任务未阻塞且同时争抢互斥量）关中断也无效
+    // 唯一一种情况是， **判断 - 获取锁** 的过程中被中断的情况，此时调度到其他程序就会出现同时有两个程序操作临界区的情况发生，但是概率较小。
     task_t* current = get_current();
     
     while(mutex->value){
@@ -1056,3 +1057,63 @@ void mutex_unlock(mutex_t* mutex){
 ```
 
 此外需要修复console的临界区操作，若在操作console打印时候发生中断，且另一个程序也尝试写console，则可能会导致显示异常，因此需要通过mutex设置临界区。
+
+但是与下面的自旋锁描述一致，若在判断和获取之间发生了中断，就会导致两个进程获取了同一个互斥资源，所以 **判断 - 获取锁** 必须是原子操作，更新代码如下：
+
+```c
+void mutex_lock(mutex_t* mutex) {
+    task_t* current = get_current();
+    int expected = 0;
+    int new_value = 1;
+
+    // 若想不关中断，则必须让“检查+获取锁”是原子操作。
+    // 否则若中断于二者中间，此时调度到其他程序就会出现同时有两个程序操作临界区的情况发生。
+    while (true) {
+        asm volatile(
+            "lock cmpxchg %2, %1"
+            : "=a"(expected), "+m"(mutex->value)
+            : "r"(new_value), "0"(expected)
+            : "memory");
+
+        // 如果cmpxchg成功，则mutex->value已经从0变成了1
+        if (expected == 0) {
+            break;  // 成功获取锁，退出循环
+        }
+
+        // 如果未成功获取锁，任务进入阻塞
+        task_block(current, &mutex->waiters, TASK_BLOCKED);
+        expected = 0;  // 重置expected为0，用于下次比较
+    }
+}
+
+void mutex_unlock(mutex_t* mutex){
+    // 解锁也不需要关中断，一种情况：mutex--后瞬间被中断，新任务又恰好占用mutex，
+    // 调度时阻塞任务被恢复会再次判断mutex是否被占用，并再次进入阻塞。
+    task_t* current = get_current();
+    
+    // 直接减小mutex->value的值，解锁
+    asm volatile(
+        "lock dec %0"
+        : "+m"(mutex->value)
+        : 
+        : "memory");
+
+    task_unblock(&mutex->waiters);
+}
+```
+
+
+
+# Lock 锁
+
+## 自旋锁
+
+同一时间只有一个进程在运行，此时大多数情况都不会出现问题，但是存在 **判断 - 获取锁** 的过程中被中断的情况，此时调度到其他程序就会出现同时有两个程序操作临界区的情况发生。
+
+不过在单线程操作系统上，自旋锁的意义不大，互斥量是更好的选择。自旋锁主要目的是在多线程操作系统上，减少进程阻塞-调度-恢复的上下文开销，所以不进行实现了。
+
+> 在单线程操作系统中，同一时刻只会有一个进程在运行。因此，自旋锁的自旋行为在这种情况下毫无意义。因为自旋锁的主要机制是**不断轮询等待锁的释放**，但是在单线程系统中，轮询等待的线程是唯一运行的线程，它无法让出CPU时间给其他进程来释放锁，结果就是进入了**无谓的自旋等待**。
+
+## 读写锁
+
+消费者生产者模型，也就是value是int而不是bool
