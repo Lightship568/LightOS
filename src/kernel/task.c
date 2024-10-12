@@ -20,6 +20,7 @@ extern u32 jiffy;             // clock.c 时钟中断的ms间隔
 static list_t sleep_list;  // 睡眠任务链表
 static list_t block_list;  // 阻塞任务链表
 static mutex_t mutex_test; // 测试用的互斥量
+static rwlock_t rwlock_test; // 测试用的读写锁
 
 task_t* get_current() {
     return current;
@@ -101,29 +102,40 @@ void task2() {  // 73453
     }
 }
 
-void task_sleep_test() {
+void task_reader1() {
     int i = 0;
     while (true) {
         start_interrupt();
-        mutex_lock(&mutex_test);
-        printk("taskB get mutex and trying to sleep 1000 ms!, times %d\n", ++i);
-        sleep(1000);
-        printk("taskB wakeup, release mutex\n");
-        mutex_unlock(&mutex_test);
+        rwlock_read_lock(&rwlock_test);
+        printk("reader 1 get rwlock!, times %d\n", ++i);
+        sleep(2000);
+        printk("reader 1 wakeup, release rwlock\n");
+        rwlock_read_unlock(&rwlock_test);
     }
 }
-void task_sleep_test2() {
+void task_reader2() {
     int i = 0;
     while (true) {
         start_interrupt();
-        mutex_lock(&mutex_test);
-        printk("taskC get mutex and trying to sleep 1000 ms!, times %d\n", ++i);
-        sleep(1000);
-        printk("taskC wakeup, release mutex\n");
-        mutex_unlock(&mutex_test);
+        rwlock_read_lock(&rwlock_test);
+        printk("reader 2 get rwlock!, times %d\n", ++i);
+        sleep(2000);
+        printk("reader 2 wakeup, release rwlock\n");
+        rwlock_read_unlock(&rwlock_test);
     }
 }
 
+void task_writer() {
+    int i = 0;
+    while (true) {
+        start_interrupt();
+        rwlock_write_lock(&rwlock_test);
+        printk("writer get rwlock!, times %d\n", ++i);
+        sleep(3000);
+        printk("writer wakeup after 3000ms, release rwlock\n");
+        rwlock_write_unlock(&rwlock_test);
+    }
+}
 void idle() {
     while (true) {
         start_interrupt();
@@ -169,8 +181,9 @@ pid_t task_create(void (*task_ptr)(void),
 void task_setup(void) {
     pid_t pid;
     pid = task_create(idle, "idle", 1, KERNEL_USER);
-    pid = task_create(task_sleep_test, "testB", 50, KERNEL_USER);
-    pid = task_create(task_sleep_test2, "testC", 50, KERNEL_USER);
+    pid = task_create(task_reader1, "reader 1", 5, KERNEL_USER);
+    pid = task_create(task_reader2, "reader 2", 5, KERNEL_USER);
+    pid = task_create(task_writer, "writer", 5, KERNEL_USER);
 
     current = task_list[0];
     // 写入进程0的栈信息
@@ -188,6 +201,7 @@ void task_init(void) {
     list_init(&sleep_list);
     list_init(&block_list);
     mutex_init(&mutex_test);
+    rwlock_init(&rwlock_test);
     task_setup();
 }
 
