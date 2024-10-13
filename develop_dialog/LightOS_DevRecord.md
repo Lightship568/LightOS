@@ -1136,3 +1136,91 @@ typedef struct wrlock_t{
 但是读写模型有一个问题，读者可以有很多个，而如果通通加入阻塞队列，则会导致读者如同队列一般一个个执行，而如果一次性释放所有队列，则可能释放新的写者，所有进程又要重新进入一次队列，效率肯定不行。
 
 考虑到目前单核单线程的操作系统实际情况，需要用自旋（不是自旋锁），即while(value)的形式，不能使用阻塞的方式，否则无法决定写者进程被唤醒的时机，写者会被饿死。
+
+# Multiboot2 头
+
+## grub 支持
+
+multiboot 是 grub 的标准，接下来接入grub，需要让内核支持 multiboot。
+
+grub 是 linux 常用的引导程序也就是 bootloader，所以它替代了手写的 bootloader两部分，可以自动加载内核并且开启保护模式，因此可以直接从内核镜像的head 的部分开始，这个 multiboot2 的头就需要写道 head 的开头。
+
+> 要支持 multiboot2，内核必须添加一个 multiboot 头，而且必须再内核开始的 32768(0x8000) 字节，而且必须 64 字节对齐；
+>
+> | 偏移  | 类型 | 名称                     | 备注 |
+> | ----- | ---- | ------------------------ | ---- |
+> | 0     | u32  | 魔数 (magic)             | 必须 |
+> | 4     | u32  | 架构 (architecture)      | 必须 |
+> | 8     | u32  | 头部长度 (header_length) | 必须 |
+> | 12    | u32  | 校验和 (checksum)        | 必须 |
+> | 16-XX |      | 标记 (tags)              | 必须 |
+>
+> - `magic` = 0xE85250D6
+> - `architecture`:
+>   - 0：32 位保护模式
+> - `checksum`：与 `magic`, `architecture`, `header_length` 相加必须为 `0`
+
+> ## 参考文献
+>
+> - <https://www.gnu.org/software/grub/manual/grub/grub.html>
+> - <https://www.gnu.org/software/grub/manual/multiboot2/multiboot.pdf>
+> - <https://intermezzos.github.io/book/first-edition/multiboot-headers.html>
+> - <https://os.phil-opp.com/multiboot-kernel/>
+> - <https://bochs.sourceforge.io/doc/docbook/user/bios-tips.html>
+> - <https://forum.osdev.org/viewtopic.php?f=1&t=18171>
+> - <https://wiki.gentoo.org/wiki/QEMU/Options>
+> - <https://hugh712.gitbooks.io/grub/content/>
+
+添加 makefile 制作iso
+
+```makefile
+# 链接时控制内存布局，增加 multiboot2 header
+LDFLAGS:= -m elf_i386 \
+		-static \
+		-Ttext $(ENTRYPOINT)\
+		--section-start=.multiboot2=$(MULTIBOOT2)
+LDFLAGS:=$(strip ${LDFLAGS})
+
+# 创建 grub 引导的系统 iso 镜像文件
+$(BUILD)/kernel.iso: $(BUILD)/kernel.bin $(SRC)/utils/grub.cfg
+	grub-file --is-x86-multiboot2 $< # 检查 iso 是否合法
+	mkdir -p $(BUILD)/iso/boot/grub
+	cp $< $(BUILD)/iso/boot
+	cp $(SRC)/utils/grub.cfg $(BUILD)/iso/boot/grub
+	grub-mkrescue -o $@ $(BUILD)/iso
+```
+
+grub-mkrescue需要安装两个工具
+
+```bash
+sudo apt-get install xorriso # 用于在 UNIX 类操作系统（如 Linux）中创建、读取和修改 ISO 9660 文件系统映像，也就是常用于光盘或 USB 启动盘的 ISO 镜像文件。
+sudo apt-get install mtools # 用于创建 可启动的 ISO 镜像。如果你正在构建操作系统内核或制作 LiveCD、安装盘等，xorriso 可能是制作 ISO 镜像的一部分工具链。
+```
+
+grub.cfg
+
+```ini
+set timeout=3
+set default=0
+
+menuentry "LightOS"{
+    multiboot2 /boot/kernel.bin
+}
+```
+
+grub顺利启动后，由于之前的memory_init需要检查bootloader提供的内核魔术，但是由于grub替代了bootloader，因此魔术会校验失败。
+
+## grub 引导内核后的 i386 状态
+
+- EAX：魔数 `0x36d76289`
+- EBX：包含 bootloader 存储 multiboot2 信息结构体的，32 位物理地址
+- CS：32 位 可读可执行的代码段，尺寸 4G
+- DS/ES/FS/GS/SS：32 位可读写的数据段，尺寸 4G
+- A20 线：启用
+- CR0：PG = 0, PE = 1，其他未定义
+- EFLAGS：VM = 0, IF = 0, 其他未定义（VM: Virtual 8086 Mode，没必要支持16位实模式程序，且8086要用到前1M给16实模式应用）
+- ESP：内核必须尽早切换栈顶地址
+- GDTR：内核必须尽早使用自己的全局描述符表
+- IDTR：内核必须在设置好自己的中断描述符表之前关闭中断
+
+因此需要修改head.asm，设置gdt、段寄存器、esp，以及修改memory_init的启动魔术判断（设置memory_base与memory_size）。

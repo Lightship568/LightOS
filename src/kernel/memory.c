@@ -3,6 +3,7 @@
 #include <lib/stdlib.h>
 #include <lib/string.h>
 #include <lightos/memory.h>
+#include <lightos/multiboot2.h>
 #include <sys/assert.h>
 #include <sys/types.h>
 
@@ -32,11 +33,19 @@ static u32 free_pages = 0;   // 空闲内存页数
 
 void memory_init(u32 magic, u32 addr) {
     DEBUGK("memory_init...\n");
-    u32 count;
-    ards_t* ptr;
+    u32 count = 0;
+    // bootloader 启动
+    ards_t* ptr;  // loader 启动的 address range descriptor structure
 
-    // loader 进入内核会有 magic
+    // grub 启动
+    multi_tag_t* tag;
+    u32 size_mbi;
+    multi_tag_mmap_t* mtag;
+    multi_mmap_entry_t* entry;
+
+    // 引导来源
     if (magic == LIGHTOS_MAGIC) {
+        // boot + loader 启动
         count = *(u32*)addr;
         ptr = (ards_t*)(addr + 4);
 
@@ -47,6 +56,30 @@ void memory_init(u32 magic, u32 addr) {
                 memory_base = (u32)ptr->base;
                 memory_size = (u32)ptr->size;
             }
+        }
+
+    } else if (magic == MULTIBOOT2_MAGIC) {
+        // grub 启动
+        size_mbi = *(unsigned int*)addr;
+        tag = (multi_tag_t*)(addr + 8);
+        DEBUGK("Announced multiboot infomation size 0x%x\n", size_mbi);
+        while (tag->type != MULTIBOOT_TAG_TYPE_END) {
+            if (tag->type == MULTIBOOT_TAG_TYPE_MMAP) {
+                break;
+            }
+            // 下一个 tag 对齐到了 8 字节
+            tag = (multi_tag_t*)((u32)tag + ((tag->size + 7) & ~7));
+        }
+        mtag = (multi_tag_mmap_t*)tag;
+        entry = mtag->entries;
+        while ((u32)entry < (u32)tag + tag->size){
+            DEBUGK("Memory base 0x%p, size 0x%p, type %d\n", (u32)entry->addr, (u32)entry->len, (u32)entry->type);
+            count++;
+            if (entry->type == ZONE_VALID && entry->len > memory_size){
+                memory_base = (u32)entry->addr;
+                memory_size = (u32)entry->len;
+            }
+            entry = (multi_mmap_entry_t *)((u32)entry + mtag->entry_size);
         }
 
     } else {

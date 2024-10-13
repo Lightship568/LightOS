@@ -138,7 +138,9 @@ protect_mode:
 
     ; Here to jump to head.asm in kernel!
 
-    jmp dword code_selector:0x10000
+    ; 0x10000 is multiboot header, need to add 64 bytes (0x40)
+    ; 64 bytes align is controlled by makefile
+    jmp dword code_selector:0x10040
 
     ud2; 表示出错
 

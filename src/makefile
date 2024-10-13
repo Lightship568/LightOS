@@ -1,6 +1,7 @@
 BUILD:= ../build
 SRC:= .
-ENTRYPOINT:= 0x10000
+MULTIBOOT2:= 0x10000
+ENTRYPOINT:= 0x10040 # multiboot2 + 64 bytes
 
 CFLAGS:= -m32
 # CFLAGS:= -Qn 					#去掉gcc版本信息
@@ -56,6 +57,13 @@ $(BUILD)/lib/%.o: $(SRC)/lib/%.asm
 	$(shell mkdir -p $(dir $@))
 	nasm -f elf32 $(DEBUG) $< -o $@
 
+# 链接时控制内存布局，增加 multiboot2 header
+LDFLAGS:= -m elf_i386 \
+		-static \
+		-Ttext $(ENTRYPOINT)\
+		--section-start=.multiboot2=$(MULTIBOOT2)
+LDFLAGS:=$(strip ${LDFLAGS})
+
 # kernel
 # -T 重定位text入口地址
 $(BUILD)/kernel.bin: \
@@ -84,7 +92,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/lib/mutex.o		\
 
 	$(shell mkdir -p $(dir $@))
-	ld -m elf_i386 -static $^ -o $@ -Ttext $(ENTRYPOINT) 
+	ld ${LDFLAGS} $^ -o $@
 
 # 方便loader加载内核
 $(BUILD)/system.bin: $(BUILD)/kernel.bin
@@ -104,6 +112,17 @@ $(BUILD)/LightOS.img: $(BUILD)/boot/boot.bin $(BUILD)/boot/loader.bin $(BUILD)/s
 	test -n "$$(find $(BUILD)/system.bin -size -100k)"
 	dd if=$(BUILD)/system.bin of=$@ bs=512 count=200 seek=5 conv=notrunc # 5扇区开始写200个扇区，100k
 
+
+# 创建 grub 引导的系统 iso 镜像文件
+$(BUILD)/kernel.iso: $(BUILD)/kernel.bin $(SRC)/utils/grub.cfg
+	grub-file --is-x86-multiboot2 $< # 检查 iso 是否合法
+	mkdir -p $(BUILD)/iso/boot/grub
+	cp $< $(BUILD)/iso/boot
+	cp $(SRC)/utils/grub.cfg $(BUILD)/iso/boot/grub
+	grub-mkrescue -o $@ $(BUILD)/iso
+
+
+
 .PHONY: clean
 clean:
 	rm -rf $(BUILD)
@@ -119,19 +138,33 @@ bochs: $(BUILD)/LightOS.img
 
 QEMU := qemu-system-i386 \
 	-m 32M \
-	-boot c \
-	-drive file=$(BUILD)/LightOS.img,if=ide,index=0,media=disk,format=raw	\
 	-audiodev pa,id=hda,server=/run/user/1000/pulse/native \
 	-machine pcspk-audiodev=hda \
 	-rtc base=localtime	\
 
+QEMU_DISK:=-boot c\
+	-drive file=$(BUILD)/LightOS.img,if=ide,index=0,media=disk,format=raw
+
+QEMU_CDROM:=-boot d\
+	-drive file=$(BUILD)/kernel.iso,media=cdrom\
+
+QEMU_DEBUG:=-s -S
+
 .PHONY: qemu
 qemu: $(BUILD)/LightOS.img
-	$(QEMU)
+	$(QEMU) $(QEMU_DISK)
 
 .PHONY: qemug
 qemug: $(BUILD)/LightOS.img
-	$(QEMU) -s -S
+	$(QEMU) $(QEMU_DISK) $(QEMU_DEBUG)
+
+.PHONY: qemu-grub
+qemu-grub: $(BUILD)/kernel.iso
+	$(QEMU) $(QEMU_CDROM)
+
+.PHONY: qemug-grub
+qemug-grub: $(BUILD)/kernel.iso
+	$(QEMU) $(QEMU_CDROM) $(QEMU_DEBUG)
 
 $(BUILD)/LightOS.vmdk: $(BUILD)/LightOS.img
 	qemu-img convert -O vmdk $< $@

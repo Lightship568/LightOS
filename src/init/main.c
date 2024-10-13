@@ -29,7 +29,6 @@ extern void schedule();
 
 void kernel_init(void) {
     time_init();
-    gdt_init();
     interrupt_init();
     memory_map_init();
 
