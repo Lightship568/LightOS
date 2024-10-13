@@ -90,6 +90,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/lib/list.o			\
 	$(BUILD)/kernel/schedule.o	\
 	$(BUILD)/lib/mutex.o		\
+	$(BUILD)/kernel/keyboard.o	\
 
 	$(shell mkdir -p $(dir $@))
 	ld ${LDFLAGS} $^ -o $@
@@ -115,6 +116,7 @@ $(BUILD)/LightOS.img: $(BUILD)/boot/boot.bin $(BUILD)/boot/loader.bin $(BUILD)/s
 
 # 创建 grub 引导的系统 iso 镜像文件
 $(BUILD)/kernel.iso: $(BUILD)/kernel.bin $(SRC)/utils/grub.cfg
+	rm -f $(BUILD)/kernel.iso
 	grub-file --is-x86-multiboot2 $< # 检查 iso 是否合法
 	mkdir -p $(BUILD)/iso/boot/grub
 	cp $< $(BUILD)/iso/boot

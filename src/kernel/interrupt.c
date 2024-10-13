@@ -6,6 +6,8 @@
 #include <sys/assert.h>
 #include <sys/global.h>
 
+extern void keyboard_init(void);
+
 gate_t idt[IDT_SIZE];
 pointer_t idt_ptr;
 
@@ -219,6 +221,8 @@ void idt_init(void) {
     for (size_t i = 0x20; i < TRAP_TABLE_SIZE; ++i) {
         trap_handler_table[i] = outer_interrupt_handler;
     }
+    // 键盘中断初始化
+    keyboard_init();
 
     // 设置syscall
     gate = &idt[0x80];
