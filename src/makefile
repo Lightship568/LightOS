@@ -168,6 +168,9 @@ qemu-grub: $(BUILD)/kernel.iso
 qemug-grub: $(BUILD)/kernel.iso
 	$(QEMU) $(QEMU_CDROM) $(QEMU_DEBUG)
 
+.PHONY: iso
+iso: $(BUILD)/kernel.iso
+
 $(BUILD)/LightOS.vmdk: $(BUILD)/LightOS.img
 	qemu-img convert -O vmdk $< $@
 .PHONY: vmdk

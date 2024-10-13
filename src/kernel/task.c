@@ -107,9 +107,9 @@ void task_reader1() {
     while (true) {
         start_interrupt();
         rwlock_read_lock(&rwlock_test);
-        printk("reader 1 get rwlock!, times %d\n", ++i);
+        // printk("reader 1 get rwlock!, times %d\n", ++i);
         sleep(2000);
-        printk("reader 1 wakeup, release rwlock\n");
+        // printk("reader 1 wakeup, release rwlock\n");
         rwlock_read_unlock(&rwlock_test);
     }
 }
@@ -118,9 +118,9 @@ void task_reader2() {
     while (true) {
         start_interrupt();
         rwlock_read_lock(&rwlock_test);
-        printk("reader 2 get rwlock!, times %d\n", ++i);
+        // printk("reader 2 get rwlock!, times %d\n", ++i);
         sleep(2000);
-        printk("reader 2 wakeup, release rwlock\n");
+        // printk("reader 2 wakeup, release rwlock\n");
         rwlock_read_unlock(&rwlock_test);
     }
 }
@@ -130,9 +130,9 @@ void task_writer() {
     while (true) {
         start_interrupt();
         rwlock_write_lock(&rwlock_test);
-        printk("writer get rwlock!, times %d\n", ++i);
+        // printk("writer get rwlock!, times %d\n", ++i);
         sleep(3000);
-        printk("writer wakeup after 3000ms, release rwlock\n");
+        // printk("writer wakeup after 3000ms, release rwlock\n");
         rwlock_write_unlock(&rwlock_test);
     }
 }
