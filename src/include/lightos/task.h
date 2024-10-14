@@ -109,8 +109,11 @@ void sys_sleep(u32 ms);
 void task_wakeup(void);
 
 // 非系统调用，阻塞任务并加入对应阻塞链表
+// waiting_list 可以为 NULL，此时不关中断，只设置 task 本身并调度
 void task_block(task_t* task, list_t* waiting_list, task_state_t task_state);
 // 任务恢复需要传入阻塞链表，默认FIFO
 void task_unblock(list_t* waiting_list);
+// 【中断中使用】如果没有阻塞链表，可以单独传递task指针，且没有yield，不会让出执行流
+void task_intr_unblock_no_waiting_list(task_t* task);
 
 #endif

@@ -5,7 +5,7 @@
  * 
  * 读写锁
  * readers + writer，自旋非阻塞实现。
- * writer 释放锁后主动 yield
+ * writer 释放锁后主动 schedule 让出执行流
  */
 #include <lib/mutex.h>
 #include <lightos/task.h>
@@ -131,5 +131,5 @@ void rwlock_write_lock(rwlock_t* lock){
 void rwlock_write_unlock(rwlock_t* lock){
     lock->writer = 0; //释放写锁
     // 因为并非采用阻塞队列唤醒的方式，容易一直争抢锁导致读者饿死，需要主动调度
-    yield();
+    schedule();
 }

@@ -2,6 +2,9 @@
 #include <lib/print.h>
 #include <lightos/interrupt.h>
 #include <sys/assert.h>
+#include <lib/kfifo.h>
+#include <lib/mutex.h>
+#include <lightos/task.h>
 
 #define KEYBOARD_DATA_PORT 0x60
 #define KEYBOARD_CTRL_PORT 0x64
@@ -218,6 +221,13 @@ static char keymap[][4] = {
     /* 0x5F */ {INV, INV, false, false},  // PrintScreen
 };
 
+#define KEYBOARD_BUFFER_SIZE 64        // 输入缓冲区大小
+static char kb_buf[KEYBOARD_BUFFER_SIZE]; // 输入缓冲区
+static kfifo_t kb_fifo;       // 键盘输入循环队列
+
+static mutex_t kb_mutex;            // 键盘驱动互斥锁
+static task_t* fg_task;      // 阻塞并等待输入的前台进程
+
 static bool capslock_state = false;  // 大写锁定
 static bool scrlock_state = false;   // 滚动锁定
 static bool numlock_state = false;   // 数字锁定
@@ -334,10 +344,37 @@ void keyboard_handler(int vector) {
     if (ch == INV)
         return;
 
-    printk("%c", ch);
+    if (fg_task != NULL){
+        kfifo_put(&kb_fifo, ch);
+        task_intr_unblock_no_waiting_list(fg_task);
+        fg_task = NULL;
+    }
+}
+
+u32 keyboard_read(char* buf, u32 count){
+    // todo: 完成 tty 后就不能在这么底层实现read了，应该需要单个字符立即传给tty全局缓冲区，
+    // 由tty实现终端回显、区分不同的fg_task、再检查\n或根据flush，将字符串整体推送到fg的缓冲区。
+    // 否则无法实现tty控制以及fg的切换，目前先这样测试。
+    mutex_lock(&kb_mutex);
+    int nr = 0;
+    while (nr < count){
+        while (kfifo_empty(&kb_fifo)){
+            fg_task = get_current();
+            task_block(fg_task, NULL, TASK_WARTING); // 阻塞等待输入
+        }
+        buf[nr++] = kfifo_get(&kb_fifo); // 加入到目标缓冲区
+    }
+    mutex_unlock(&kb_mutex);
+    return nr;
 }
 
 void keyboard_init(void) {
+    
+    kfifo_init(&kb_fifo, kb_buf, KEYBOARD_BUFFER_SIZE);
+    mutex_init(&kb_mutex);
+
+    fg_task = NULL;
+
     set_interrupt_handler(IRQ_KEYBOARD, keyboard_handler);
     set_interrupt_mask(IRQ_KEYBOARD, true);
 }

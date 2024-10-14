@@ -12,6 +12,8 @@
 #include <sys/types.h>
 #include <lib/mutex.h>
 
+extern u32 keyboard_read(char* buf, u32 count);
+
 task_t* task_list[NR_TASKS] = {0};
 task_t* current = (task_t*)NULL;
 extern u32 volatile jiffies;  // clock.c 时间片数
@@ -136,11 +138,22 @@ void task_writer() {
         rwlock_write_unlock(&rwlock_test);
     }
 }
-void idle() {
+void idle(){
+    start_interrupt();
     while (true) {
-        start_interrupt();
         asm volatile("hlt\n");
-        schedule();
+        // schedule();
+        yield();
+    }
+}
+
+void init(void){
+    char str[11] = {0};
+    start_interrupt();
+    while (true){
+        printk("trying to read from keyboard\n");
+        keyboard_read(str, 2);
+        printk("read %d: %s\n", 2, str);
     }
 }
 
@@ -181,11 +194,13 @@ pid_t task_create(void (*task_ptr)(void),
 void task_setup(void) {
     pid_t pid;
     pid = task_create(idle, "idle", 1, KERNEL_USER);
-    pid = task_create(task_reader1, "reader 1", 5, KERNEL_USER);
-    pid = task_create(task_reader2, "reader 2", 5, KERNEL_USER);
-    pid = task_create(task_writer, "writer", 5, KERNEL_USER);
+    // pid = task_create(task_reader1, "reader 1", 5, KERNEL_USER);
+    // pid = task_create(task_reader2, "reader 2", 5, KERNEL_USER);
+    // pid = task_create(task_writer, "writer", 5, KERNEL_USER);
 
-    current = task_list[0];
+    pid = task_create(init, "init", 5, KERNEL_USER);
+
+    current = task_list[0]; // IDLE
     // 写入进程0的栈信息
     asm volatile(
         "mov %0, %%esp\n"                               // 恢复 esp
@@ -261,9 +276,17 @@ void task_wakeup(void) {
 }
 
 void task_block(task_t* task, list_t* waiting_list, task_state_t task_state){
+    
+    if (waiting_list == NULL){
+        task->state = task_state;
+        if (current == task){
+            schedule();
+            return;
+        }
+    }
+
     // 应该需要关中断，否则链表操作可能会崩，这里没法再使用互斥量了，否则catch-22
-    bool intr = get_interrupt_state();
-    set_interrupt_state(false);
+    bool intr = interrupt_disable();
 
     list_pushback(waiting_list, &task->node);
     task->state = task_state;
@@ -276,17 +299,21 @@ void task_block(task_t* task, list_t* waiting_list, task_state_t task_state){
 
 void task_unblock(list_t* waiting_list){
     // 中断处理同上
-    bool intr = get_interrupt_state();
     task_t* task;
     list_node_t* pnode;
-    set_interrupt_state(false);
+    bool intr = interrupt_disable();
     
     if (!list_empty(waiting_list)){
         pnode = list_pop(waiting_list);
         task = element_entry(task_t, node, pnode);
         task->state = TASK_READY;
-        yield();
+        yield(); // 如果不主动让出，很可能循环获取资源导致阻塞的进程饿死
     }
 
     set_interrupt_state(intr);
+}
+
+void task_intr_unblock_no_waiting_list(task_t* task){
+    // 中断中不可yield，不可主动让出执行流
+    task->state = TASK_READY;
 }

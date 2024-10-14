@@ -63,7 +63,7 @@ void clock_handler(int vector) {
 
     if (current->ticks <= 0) {
         current->ticks = current->priority;
-        schedule();
+        schedule(); // 程序再次被调度时将会从这里继续执行，后续是iret。且为关中断状态，中断不会重入
     }
 }
 

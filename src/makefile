@@ -91,6 +91,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/schedule.o	\
 	$(BUILD)/lib/mutex.o		\
 	$(BUILD)/kernel/keyboard.o	\
+	$(BUILD)/lib/kfifo.o		\
 
 	$(shell mkdir -p $(dir $@))
 	ld ${LDFLAGS} $^ -o $@
