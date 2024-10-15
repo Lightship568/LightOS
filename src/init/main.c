@@ -25,9 +25,12 @@ char message[] =
 /**
  * 测试用
  */
-extern void schedule();
+extern void schedule(void);
+extern void tss_init(void);
+extern void idle(void);
 
 void kernel_init(void) {
+    tss_init(); // 初始化 GDT[3] TSS
     time_init();
     interrupt_init();
     memory_map_init();
@@ -42,9 +45,6 @@ void kernel_init(void) {
     // char* ptr = (char *)0x7fffff;
     // printk("0x%p: %s\n", ptr,ptr);
 
-    // 不开中断，让进程初始化之后在内部开中断，防止clock_handler找不到进程panic
-    // start_interrupt();
-
 // 测试 syscall 和 task
 
     syscall_init();
@@ -52,10 +52,5 @@ void kernel_init(void) {
 
     // DEBUGK("return value is %d\n", ret);
 
-    // move_to_user_mode();
-
-    // for (;;){
-    //     schedule();
-    // }
-    hang(); 
+    idle(); //包含切栈与开中断
 }

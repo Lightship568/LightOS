@@ -4,6 +4,7 @@
 
 descriptor_t gdt[GDT_SIZE];
 pointer_t gdt_ptr;
+tss_t tss;
 
 void descriptor_init(descriptor_t* desc, u32 base, u32 limit){
     desc->base_low = base & 0xffffff;
@@ -60,4 +61,24 @@ void gdt_init(void){
     gdt_ptr.limit = sizeof(gdt) - 1;
 
     DEBUGK("GDT Initialized at 0x%p\n", gdt);
+}
+
+void tss_init(void) {
+    memset(&tss, 0, sizeof(tss));
+
+    tss.ss0 = KERNEL_DATA_SELECTOR;
+    tss.iobase = sizeof(tss); // tss结构结束的位置就是iobase，实际用不到
+
+    descriptor_t *desc = gdt + KERNEL_TSS_IDX;
+    descriptor_init(desc, (u32)&tss, sizeof(tss) - 1);
+    desc->segment = 0;     // 系统段
+    desc->granularity = 0; // 字节
+    desc->big = 0;         // 固定为 0
+    desc->long_mode = 0;   // 固定为 0
+    desc->present = 1;     // 在内存中
+    desc->DPL = 0;         // 用于任务门或调用门
+    desc->type = 0b1001;   // 32 位可用 tss
+
+    asm volatile(
+        "ltr %%ax\n" ::"a"(KERNEL_TSS_SELECTOR));
 }

@@ -13,6 +13,7 @@
 #include <lib/mutex.h>
 
 extern u32 keyboard_read(char* buf, u32 count);
+extern void init_kthread(void);
 
 task_t* task_list[NR_TASKS] = {0};
 task_t* current = (task_t*)NULL;
@@ -48,42 +49,25 @@ pid_t kfork() {
     return pid;
 }
 
-/**
- * 软件实现上下文切换功能
- */
+extern void switch_to(int n);
 
-extern void save_state(struct tss_t* tss, void* eip);
-extern void load_state(struct tss_t* tss);
-
-void switch_to(int n) {
-    assert(n >= 0 && n < NR_TASKS && task_list[n] != NULL);
-    if (current == task_list[n])
-        return;
-    save_state(&current->tss, &&resume_execution);
-    current = task_list[n];
-    load_state(&current->tss);
-resume_execution:
-    // 从这里恢复执行
-}
-
-void schedule() {
+void schedule(void) {
     // 获取 current 的 pid
     pid_t n = current->pid + 1;
+    pid_t target = 0;
     for (int i = 0; i < NR_TASKS; ++i, ++n) {
         n %= NR_TASKS;
-        if (task_list[n] != NULL && task_list[n]->ticks &&
+        if (n != 0 && task_list[n] != NULL && task_list[n]->ticks &&
             task_list[n]->state == TASK_READY) {
-                task_list[n]->jiffies = jiffies;
-                switch_to(n);
-                return;
+                target = n;
+                break;
         }
     }
-    switch_to(0);
+    switch_to(target);
 }
 #define INTERVEL 10000000
 
 void task1() {  // 73402
-    start_interrupt();
     while (true) {
         for (int j = 0; j < 5; ++j) {
             printk("A");
@@ -94,7 +78,6 @@ void task1() {  // 73402
 }
 
 void task2() {  // 73453
-    start_interrupt();
     while (true) {
         for (int j = 0; j < 5; ++j) {
             printk("B");
@@ -107,7 +90,6 @@ void task2() {  // 73453
 void task_reader1() {
     int i = 0;
     while (true) {
-        start_interrupt();
         rwlock_read_lock(&rwlock_test);
         // printk("reader 1 get rwlock!, times %d\n", ++i);
         sleep(2000);
@@ -118,7 +100,6 @@ void task_reader1() {
 void task_reader2() {
     int i = 0;
     while (true) {
-        start_interrupt();
         rwlock_read_lock(&rwlock_test);
         // printk("reader 2 get rwlock!, times %d\n", ++i);
         sleep(2000);
@@ -130,7 +111,6 @@ void task_reader2() {
 void task_writer() {
     int i = 0;
     while (true) {
-        start_interrupt();
         rwlock_write_lock(&rwlock_test);
         // printk("writer get rwlock!, times %d\n", ++i);
         sleep(3000);
@@ -139,21 +119,19 @@ void task_writer() {
     }
 }
 void idle(){
+    // 写入进程0的栈信息（切栈）
+    asm volatile(
+        "mov %0, %%esp\n"                               // 恢复 esp
+        "mov %1, %%ebp\n"                               // 恢复 ebp
+        :                                               // 输出约束为空
+        : "m"(current->tss.esp), "m"(current->tss.ebp)  // 输入约束
+        : "memory"  // 告诉编译器汇编代码会修改内存
+    );
+    // 开中断，这样切进程就能保留当前中断状态方便恢复eflags
     start_interrupt();
     while (true) {
+        schedule(); 
         asm volatile("hlt\n");
-        // schedule();
-        yield();
-    }
-}
-
-void init(void){
-    char str[11] = {0};
-    start_interrupt();
-    while (true){
-        printk("trying to read from keyboard\n");
-        keyboard_read(str, 2);
-        printk("read %d: %s\n", 2, str);
     }
 }
 
@@ -186,6 +164,9 @@ pid_t task_create(void (*task_ptr)(void),
     task->tss.ebp = stack;
     task->tss.esp = stack;
 
+    // 硬件：用户态中断翻转特权级进入内核栈（ss0已经在全局tss中设置了）
+    task->tss.esp0 = stack;
+
     task->state = TASK_READY;
 
     return pid;
@@ -197,19 +178,9 @@ void task_setup(void) {
     // pid = task_create(task_reader1, "reader 1", 5, KERNEL_USER);
     // pid = task_create(task_reader2, "reader 2", 5, KERNEL_USER);
     // pid = task_create(task_writer, "writer", 5, KERNEL_USER);
-
-    pid = task_create(init, "init", 5, KERNEL_USER);
+    pid = task_create(init_kthread, "init", 5, KERNEL_USER);
 
     current = task_list[0]; // IDLE
-    // 写入进程0的栈信息
-    asm volatile(
-        "mov %0, %%esp\n"                               // 恢复 esp
-        "mov %1, %%ebp\n"                               // 恢复 ebp
-        :                                               // 输出约束为空
-        : "m"(current->tss.esp), "m"(current->tss.ebp)  // 输入约束
-        : "memory"  // 告诉编译器汇编代码会修改内存
-    );
-    idle();
 }
 
 void task_init(void) {
@@ -219,7 +190,6 @@ void task_init(void) {
     rwlock_init(&rwlock_test);
     task_setup();
 }
-
 
 void sys_yield(void) {
     schedule();

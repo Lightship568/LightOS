@@ -45,7 +45,7 @@ typedef struct descriptor_t /* 共 8 个字节 */
 // 段选择子
 typedef struct selector_t {
     u8 RPL : 2;  // Request Privilege Level
-    u8 TI : 1;   // Table Indicator
+    u8 TI : 1;   // Table Indicator, 0 for GDT, 1 for LDT
     u16 index : 13;
 } selector_t;
 
@@ -87,6 +87,7 @@ typedef struct tss_t {
     u16 ssp;         // 任务影子栈指针
 } __attribute__((packed)) tss_t;
 
+extern tss_t tss;
 
 void gdt_init(void);
 

@@ -32,8 +32,8 @@ $(BUILD)/boot/head.o: $(SRC)/boot/head.asm
 	$(shell mkdir -p $(dir $@))
 	nasm -f elf32 $(DEBUG) $< -o $@
 
-# init/main.c
-$(BUILD)/kernel/main.o: $(SRC)/init/main.c
+# init/main.c init/init.c...
+$(BUILD)/kernel/%.o: $(SRC)/init/%.c
 	$(shell mkdir -p $(dir $@))
 	gcc $(CFLAGS) $(DEBUG) $(INCLUDE) -c $< -o $@
 
@@ -92,6 +92,8 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/lib/mutex.o		\
 	$(BUILD)/kernel/keyboard.o	\
 	$(BUILD)/lib/kfifo.o		\
+	$(BUILD)/kernel/init.o		\
+
 
 	$(shell mkdir -p $(dir $@))
 	ld ${LDFLAGS} $^ -o $@

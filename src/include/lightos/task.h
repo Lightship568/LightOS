@@ -85,6 +85,30 @@ typedef struct task_struct{
     u32 magic;                      // 检测内核栈溢出（溢出到 PCB 就寄了）
 } task_t;
 
+// 中断帧，用于move_to_user 的 ROP
+typedef struct intr_frame_t {
+    u32 vector;
+    u32 edi;
+    u32 esi;
+    u32 ebp;
+    u32 esp_dummy; // 虽然 pushad 把 esp 也压入，但 esp 是不断变化的，所以会被 popad 忽略
+    u32 ebx;
+    u32 edx;
+    u32 ecx;
+    u32 eax;
+    u32 gs;
+    u32 fs;
+    u32 es;
+    u32 ds;
+    u32 vector0;
+    u32 error; // error / magic
+    u32 eip;
+    u32 cs;
+    u32 eflags;
+    u32 esp;
+    u32 ss;
+} intr_frame_t;
+
 extern task_t* task_list[NR_TASKS];
 extern task_t* current;
 
@@ -94,7 +118,7 @@ void task_init(void);
 task_t *get_current();
 
 // 调度函数
-void schedule();
+void schedule(void);
 
 // 切换上下文
 void switch_to(int n);
