@@ -1,9 +1,9 @@
 #ifndef LIGHTOS_SYSCALL_H
 #define LIGHTOS_SYSCALL_H
 
-#define NR_SYSCALL 64
+#include <sys/types.h>
 
-void syscall_init(void);
+#define NR_SYSCALL 64
 
 typedef enum syscall_t
 {
@@ -79,6 +79,6 @@ typedef enum syscall_t
 
 void yield(void);
 void sleep(u32 ms);
-
+int32 write(fd_t fd, char *buf, u32 len);
 
 #endif

@@ -10,7 +10,6 @@
 #include <lightos/lightos.h>
 #include <lightos/memory.h>
 #include <lightos/rtc.h>
-#include <lightos/syscall.h>
 #include <lightos/time.h>
 #include <sys/assert.h>
 #include <sys/global.h>
@@ -52,5 +51,5 @@ void kernel_init(void) {
 
     // DEBUGK("return value is %d\n", ret);
 
-    idle(); //包含切栈与开中断
+    idle(); //ba
 }

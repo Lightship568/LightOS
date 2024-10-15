@@ -86,13 +86,15 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/time.o		\
 	$(BUILD)/kernel/memory.o	\
 	$(BUILD)/lib/bitmap.o		\
-	$(BUILD)/kernel/syscall.o	\
+	$(BUILD)/lib/syscall.o		\
+	$(BUILD)/kernel/gate.o		\
 	$(BUILD)/lib/list.o			\
 	$(BUILD)/kernel/schedule.o	\
 	$(BUILD)/lib/mutex.o		\
 	$(BUILD)/kernel/keyboard.o	\
 	$(BUILD)/lib/kfifo.o		\
 	$(BUILD)/kernel/init.o		\
+	$(BUILD)/lib/printf.o		\
 
 
 	$(shell mkdir -p $(dir $@))

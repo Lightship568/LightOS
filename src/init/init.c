@@ -1,7 +1,7 @@
 #include <sys/types.h>
 #include <sys/global.h>
 #include <lightos/task.h>
-#include <lightos/syscall.h>
+#include <lib/syscall.h>
 #include <lib/debug.h>
 #include <lightos/memory.h>
 
@@ -44,16 +44,15 @@ void move_to_user_mode(void){
 
 }
 
+extern int printf(const char *fmt, ...);
+
 void init_uthread(void){
-    int a = 0;
+    int cnt = 0;
+    int ret = 0;
     while (true){
-        a = 0;
-        // *(u32*)0 = 0;
-        // asm volatile("cli\n");
-        a++;
-        // asm volatile("in $0x92, %ax\n");
-        yield();
-        sleep(1000);
+        ret = printf("init thread in user mode, times %d\n", cnt++);
+        printf("last printf output %d char\n", ret);
+        // sleep(1000);
     }
 }
 

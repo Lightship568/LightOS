@@ -10,7 +10,7 @@
 #include <lib/mutex.h>
 #include <lightos/task.h>
 #include <lib/print.h>
-#include <lightos/syscall.h>
+#include <lib/syscall.h>
 
 void mutex_init(mutex_t* mutex){
     mutex->value = false;
@@ -131,5 +131,5 @@ void rwlock_write_lock(rwlock_t* lock){
 void rwlock_write_unlock(rwlock_t* lock){
     lock->writer = 0; //释放写锁
     // 因为并非采用阻塞队列唤醒的方式，容易一直争抢锁导致读者饿死，需要主动调度
-    schedule();
+    yield();
 }

@@ -10,7 +10,7 @@
 
 void console_init(void);
 void console_clear(void);
-void console_write(char *buf, u32 count);
+int32 console_write(char *buf, u32 count);
 
 
 

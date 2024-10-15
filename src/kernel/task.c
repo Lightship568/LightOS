@@ -5,7 +5,6 @@
 #include <lib/string.h>
 #include <lightos/interrupt.h>
 #include <lightos/memory.h>
-#include <lightos/syscall.h>
 #include <lightos/task.h>
 #include <sys/assert.h>
 #include <sys/global.h>
@@ -92,7 +91,7 @@ void task_reader1() {
     while (true) {
         rwlock_read_lock(&rwlock_test);
         // printk("reader 1 get rwlock!, times %d\n", ++i);
-        sleep(2000);
+        sys_sleep(2000);
         // printk("reader 1 wakeup, release rwlock\n");
         rwlock_read_unlock(&rwlock_test);
     }
@@ -102,7 +101,7 @@ void task_reader2() {
     while (true) {
         rwlock_read_lock(&rwlock_test);
         // printk("reader 2 get rwlock!, times %d\n", ++i);
-        sleep(2000);
+        sys_sleep(2000);
         // printk("reader 2 wakeup, release rwlock\n");
         rwlock_read_unlock(&rwlock_test);
     }
@@ -113,7 +112,7 @@ void task_writer() {
     while (true) {
         rwlock_write_lock(&rwlock_test);
         // printk("writer get rwlock!, times %d\n", ++i);
-        sleep(3000);
+        sys_sleep(3000);
         // printk("writer wakeup after 3000ms, release rwlock\n");
         rwlock_write_unlock(&rwlock_test);
     }
@@ -277,7 +276,7 @@ void task_unblock(list_t* waiting_list){
         pnode = list_pop(waiting_list);
         task = element_entry(task_t, node, pnode);
         task->state = TASK_READY;
-        yield(); // 如果不主动让出，很可能循环获取资源导致阻塞的进程饿死
+        schedule(); // 如果不主动让出，很可能循环获取资源导致阻塞的进程饿死
     }
 
     set_interrupt_state(intr);

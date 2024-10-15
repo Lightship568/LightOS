@@ -44,4 +44,11 @@ typedef u32 idx_t;
 
 typedef u32 pid_t;
 
+typedef int32 fd_t;
+typedef enum std_fd_t{
+    stdin,
+    stdout,
+    stderr,
+} std_fd_t;
+
 #endif

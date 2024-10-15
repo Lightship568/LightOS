@@ -135,15 +135,17 @@ void console_clear(void){
 }
 
 extern void start_beep(void);
-void console_write(char *buf, u32 count){
+int32 console_write(char *buf, u32 count){
+    char ch;
+    int32 nr = 0;
+
     // 进入临界区
     mutex_lock(&mutex_console);
 
     if (count == -1){
         count = strlen(buf);
     }
-    char ch;
-    while (count--){
+    while (nr++ < count){
         ch = *buf++;
         switch (ch)
         {
@@ -197,6 +199,8 @@ void console_write(char *buf, u32 count){
 
     // 退出临界区
     mutex_unlock(&mutex_console);
+
+    return nr;
 }
 
 void console_init(void){
