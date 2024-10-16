@@ -10,12 +10,15 @@
 
 #define MEMORY_BASE 0x100000    // 1M 可用内存起始地址
 
-#define KERNEL_PAGE_DIR 0x0         // 页目录表起始位置（4页个页目录项），学 linux 指向 0，让内核物理线性相等
-#define KERNEL_PAGE_DIR_COUNT 4     // 页目录的页数量
-#define KERNEL_PAGE_TABLE (PAGE_SIZE * KERNEL_PAGE_DIR_COUNT)    // 0x1000*4 页表起始，数量为 total_pages 个
-#define KERNEL_PAGE_TABLE_COUNT 2   // 页表页数量，2 页映射 8M 给内核
+#define KERNEL_PAGE_DIR 0x0             // 页目录表起始位置（4页个页目录项），学 linux 指向 0，让内核物理线性相等
+#define KERNEL_PAGE_TABLE (PAGE_SIZE)   // 页表PT起始（内存布局：[PD]-[PT]-[PT]...-[kernel_map]）
+#define KERNEL_PAGE_TABLE_COUNT 2       // 页表页数量，2 页映射 8M 给内核
 #define KERNEL_MEM_SIZE (PAGE_SIZE * (PAGE_SIZE / 4) * KERNEL_PAGE_TABLE_COUNT)           // 内核内存大小 8M
-#define KERNEL_MAP_BITS 0x7000      // 内核虚拟内存位图的起始位置，手动计算的，紧接着两个页表的布局。
+#define KERNEL_MAP_BITS (PAGE_SIZE * (KERNEL_PAGE_TABLE_COUNT + 1))      // 内核虚拟内存位图的起始位置，紧接着两个页表的布局。
+
+//当前内核占用 8M (KERNEL_PAGE_TABLE_COUNT == 2，一页1K*4K覆盖4M)
+// 用户栈顶地址 128M
+#define USER_STACK_TOP 0x800000
 
 typedef struct page_entry_t
 {
@@ -54,5 +57,11 @@ u32 alloc_kpage(u32 count);
 
 // 释放 count 个连续的内核页
 void free_kpage(u32 vaddr, u32 count);
+
+// 用户态内存映射管理
+// 将 vaddr 映射物理内存
+void link_page(u32 vaddr);
+// 取消 vaddr 的物理内存映射
+void unlink_page(u32 vaddr);
 
 #endif

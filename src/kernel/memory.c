@@ -199,13 +199,17 @@ static void entry_init(page_entry_t* entry, u32 index) {
 // 初始化内存映射，也就是完成最初的页表映射，实现内核物理地址=线性地址
 void mapping_init(void) {
     /**
-     * 注意，这里虽然初始化了完整的32g也就是四个页目录表，
-     * 但是只映射了第一个pde的前2项到相应页表上了（映射8M给了内核）
-     * 后续需要完善pde的映射，才能够使用完整的32G
+     * 注意，这里只初始化了一个PD和两个PT，一个PT可以映射1024*4K也就是4M的内存。
+     * 所以当前映射了 8M 给内核。
+     * 
+     * PD永远都是1个，这是根据分页的地址分割决定的，10/10/12的分割刚好让一个页的PD可以覆盖10位的索引。
+     * 64位也一样，四级分页9/9/9/9/12（48bits），加载到cr3的PD永远只有一个页，不存在跨页的情况。
+     * 
+     * 后续为了给内核分配更多空间（1G），需要增加PDE（PT）到 1G/4M = 256 个项。
      */
     page_entry_t* pde = (page_entry_t*)KERNEL_PAGE_DIR;
-    // 清空前 4 个 pde
-    memset(pde, 0, PAGE_SIZE * KERNEL_PAGE_DIR_COUNT);
+    // 清空 pde
+    memset(pde, 0, PAGE_SIZE);
 
     u32 index = 0;
     // 设置 pde 前 total_page_table_pages 项目指向顺应页表地址
@@ -274,4 +278,12 @@ void free_kpage(u32 vaddr, u32 count) {
     assert(count > 0);
     _reset_page(&kernel_map, vaddr, count);
     DEBUGK("Free kernel pages 0x%p count %d\n", vaddr, count);
+}
+
+void link_page(u32 vaddr){
+
+}
+
+void unlink_page(u32 vaddr){
+
 }
