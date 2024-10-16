@@ -95,6 +95,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/lib/kfifo.o		\
 	$(BUILD)/kernel/init.o		\
 	$(BUILD)/lib/printf.o		\
+	$(BUILD)/lib/arena.o		\
 
 
 	$(shell mkdir -p $(dir $@))

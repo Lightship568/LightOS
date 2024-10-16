@@ -15,8 +15,10 @@
 #include <sys/global.h>
 #include <sys/types.h>
 #include <lightos/task.h>
+#include <lib/arena.h>
 
-extern void clock_init();  // clock无.h文件
+extern void clock_init();           // clock.c 无 .h
+extern void syscall_init(void);     // gate.c
 
 char message[] =
     "hello LightOS!!!111111111111111111111111111111111111111111111\n\0";
@@ -49,7 +51,7 @@ void kernel_init(void) {
     syscall_init();
     task_init();
 
-    // DEBUGK("return value is %d\n", ret);
+    aerna_init();
 
     idle(); //ba
 }

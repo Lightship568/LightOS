@@ -54,5 +54,5 @@ void sleep(u32 ms){
 }
 
 int32 write(fd_t fd, char *buf, u32 len){
-    _syscall3(SYS_NR_WRITE, fd, buf, len);
+    _syscall3(SYS_NR_WRITE, fd, (u32)buf, len);
 }

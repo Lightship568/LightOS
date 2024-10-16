@@ -4,6 +4,9 @@
 #include <lib/syscall.h>
 #include <lib/debug.h>
 #include <lightos/memory.h>
+#include <lib/arena.h>
+#include <lib/string.h>
+#include <lib/print.h>
 
 void init_uthread(void);
 
@@ -50,8 +53,8 @@ void init_uthread(void){
     int cnt = 0;
     int ret = 0;
     while (true){
-        ret = printf("init thread in user mode, times %d\n", cnt++);
-        printf("last printf output %d char\n", ret);
+        // ret = printf("init thread in user mode, times %d\n", cnt++);
+        // printf("last printf output %d char\n", ret);
         // sleep(1000);
     }
 }
@@ -62,6 +65,14 @@ void init_kthread(void){
     // printk("trying to read from keyboard\n");
     // keyboard_read(str, 1);
     // printk("read %d: %s\n", 1, str);
+
+    char* p = kmalloc(0x20);
+    memset(p, 'a', 0x20);
+    p[0x1F] = '\0';
+    printk("Test kmalloc: %s\n", p);
+    kfree(p);
+
+
     DEBUGK("init kthread move to user mode\n");
     
     move_to_user_mode();

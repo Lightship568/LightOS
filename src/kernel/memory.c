@@ -244,7 +244,7 @@ static u32 _alloc_page(bitmap_t* map, u32 count) {
     }
 
     u32 addr = index << 12;
-    DEBUGK("Scan page 0x%p count %d\n", addr, count);
+    // DEBUGK("Scan page 0x%p count %d\n", addr, count);
     return addr;
 }
 
