@@ -3,6 +3,7 @@
 #include <sys/assert.h>
 #include <lib/string.h>
 #include <lib/print.h>
+#include <lib/mutex.h>
 
 /**
  * 内核用 kmalloc 与 kfree
@@ -10,6 +11,7 @@
 
 static list_t free_list;
 static list_t used_list;
+static mutex_t arena_lock;
 
 #define ARENA_MAGIC 0xA1B2C3    // 30bits
 #define MIN_BLOCK_SIZE 16       // 16 字节最小堆块
@@ -39,6 +41,9 @@ void* kmalloc(size_t size) {
     if (size == 0){
         return NULL;
     }
+
+    mutex_lock(&arena_lock);
+
     size = size >= MIN_BLOCK_SIZE? size: MIN_BLOCK_SIZE;
 
     if (list_empty(&free_list)) {
@@ -81,6 +86,9 @@ refind:
         parena->length = size;
         list_push(&free_list, &parena_divided->list);
     }
+
+    mutex_unlock(&arena_lock);
+
     return parena->buf;
 }
 
@@ -89,7 +97,6 @@ void kfree(void *ptr) {
     arena_t* parena = (arena_t*)(ptr - sizeof(arena_t));
 
     if (!ptr) return;
-    assert(list_search(&used_list, &parena->list));
     
     // overflow magic check
     if (parena->forward_ptr && parena->forward_ptr->magic != ARENA_MAGIC){
@@ -99,6 +106,9 @@ void kfree(void *ptr) {
         printk("next ptr magic: 0x%x != Magic(0x%x)\n", parena->forward_ptr->magic, ARENA_MAGIC);
         panic("overwrite the next arena!\n");
     }
+    
+    mutex_lock(&arena_lock);
+    assert(list_search(&used_list, &parena->list));
 
     list_remove(&parena->list); // 从used_list中删除
     list_push(&free_list, &parena->list); //加入free_list
@@ -115,9 +125,12 @@ void kfree(void *ptr) {
         parena->length += parena->forward_ptr->length + sizeof(arena_t);
         parena->forward_ptr = parena->forward_ptr->forward_ptr;
     }
+
+    mutex_unlock(&arena_lock);
 }
 
 void aerna_init(void){
     list_init(&free_list);
     list_init(&used_list);
+    mutex_init(&arena_lock);
 }
