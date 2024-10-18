@@ -72,6 +72,8 @@ void init_kthread(void){
     printk("Test kmalloc: %s\n", p);
     kfree(p);
 
+    printk("kernel address is 0x%p\n", &&high_check);
+high_check:
 
     DEBUGK("init kthread move to user mode\n");
     

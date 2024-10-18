@@ -32,14 +32,13 @@ extern void idle(void);
 
 void kernel_init(void) {
     tss_init(); // 初始化 GDT[3] TSS
-    time_init();
-    interrupt_init();
     memory_map_init();
 
+    interrupt_init();
+    time_init();
     clock_init();
     rtc_init();
 
-    mapping_init();
 
 // 页表映射测试
 

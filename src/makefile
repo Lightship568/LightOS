@@ -1,7 +1,11 @@
 BUILD:= ../build
 SRC:= .
-MULTIBOOT2:= 0x10000
-ENTRYPOINT:= 0x10040 # multiboot2 + 64 bytes
+# MULTIBOOT2:= 0x10000
+# ENTRYPOINT:= 0x10040 # multiboot2 + 64 bytes
+
+# 内核迁移到虚拟地址高地址空间
+MULTIBOOT2:= 0xc0010000
+ENTRYPOINT:= 0xc0010040
 
 CFLAGS:= -m32
 # CFLAGS:= -Qn 					#去掉gcc版本信息

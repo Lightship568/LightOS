@@ -19,9 +19,11 @@ header_end:
 
 extern kernel_init
 extern console_init
+extern temp_gdt_init
 extern gdt_init
 extern gdt_ptr
 
+extern mapping_init
 extern memory_init
 
 code_selector equ (1 << 3)
@@ -31,15 +33,21 @@ section .text
 global _start:
 _start:
     ; 为了与后面可能使用的grub引导兼容
-    push ebx; ards_count
+    ; 拷贝到0x29000，防止进入memory_init前被分页覆盖
+    ; push ebx; ards_count
+    push 0x30000; ards_count
     push eax; magic
-    
-    call console_init
-    call gdt_init
 
-    lgdt [gdt_ptr]; grub 启动需要尽早重设 gdt
-    jmp dword code_selector:_gdt_refresh
-_gdt_refresh:
+    mov esi, ebx          ; ESI 指向源地址 (EBX指向的地址)
+    mov edi, 0x30000      ; EDI 指向目标地址 (0x30000)
+    mov ecx, 1024         ; ECX = 1024 个双字 (4096 字节 / 4 = 1024 个双字)
+rep movsd                 ; 将 ESI 所指向的内存拷贝到 EDI（每次拷贝 4 字节）
+                          ; ECX 用作计数器，执行 1024 次拷贝
+    call temp_gdt_init ; grub 启动需要尽早重设 gdt，使用临时gdt(无全局变量)过度
+    lgdt [0x29000]
+    jmp dword code_selector:(_gdt_refresh_temp-0xC0000000)
+    ; jmp dword code_selector:(_gdt_refresh_temp)
+_gdt_refresh_temp:
 
     mov ax, data_selector
     mov ds, ax
@@ -48,9 +56,21 @@ _gdt_refresh:
     mov gs, ax
     mov ss, ax
 
-    call memory_init
 
-    mov esp, 0x10000
+    call mapping_init ; 页表配置，启动分页，跳转高地址，清空低地址PDE
+
+    call gdt_init ; 更新基于全局变量的gdt
+    lgdt [gdt_ptr]
+    jmp dword code_selector:_gdt_refresh ; jmp顺便自动转到高地址
+_gdt_refresh:
+
+    call console_init
+
+    call memory_init ; 获取和计算启动的内存参数
+
+    mov esp, 0xC0010000
+
+
 
     push L6 ; return address for
     push kernel_init ; return to kernel

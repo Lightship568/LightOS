@@ -29,10 +29,14 @@ static u32 memory_size = 0;  // 可用内存大小
 static u32 total_pages = 0;  // 所有内存页面数
 static u32 free_pages = 0;   // 空闲内存页数
 
+#define PADDR_TEMP_BOOT_MEMORY_INFO = 0xF000 // 临时用处理结果，不会被内核栈覆盖
+
 #define used_pages (total_pages - free_pages)  // 已用页数
 
+extern void _high_jmp(void); //mapping_init启动分页后跳转到虚拟地址高地址
+
 void memory_init(u32 magic, u32 addr) {
-    DEBUGK("memory_init...\n");
+
     u32 count = 0;
     // bootloader 启动
     ards_t* ptr;  // loader 启动的 address range descriptor structure
@@ -42,6 +46,8 @@ void memory_init(u32 magic, u32 addr) {
     u32 size_mbi;
     multi_tag_mmap_t* mtag;
     multi_mmap_entry_t* entry;
+
+    DEBUGK("memory_init...\n");
 
     // 引导来源
     if (magic == LIGHTOS_MAGIC) {
@@ -118,7 +124,7 @@ void memory_map_init(void) {
     DEBUGK("Memory map page count %d\n", mem_map_pages);
 
     // 清空物理内存数组
-    memset((void*)mem_map_pages, 0, mem_map_pages * PAGE_SIZE);
+    memset((void*)mem_map, 0, mem_map_pages * PAGE_SIZE);
 
     // "占用" 前 1M 的内存位置 以及 物理内存数组已经占用的页
     start_page_idx = IDX(MEMORY_BASE) + mem_map_pages;
@@ -213,19 +219,20 @@ void mapping_init(void) {
 
     u32 index = 0;
     // 设置 pde 前 total_page_table_pages 项目指向顺应页表地址
-    for (size_t i = 0; i < KERNEL_PAGE_TABLE_COUNT; ++i) {
+    for (size_t i = 0, i2 = 0x300; i < KERNEL_PAGE_TABLE_COUNT; ++i, ++i2) {
         page_entry_t* pte = (page_entry_t*)(KERNEL_PAGE_TABLE + PAGE_SIZE * i);
         memset(pte, 0, PAGE_SIZE);
         entry_init(&pde[i], IDX(pte));
+        entry_init(&pde[i2], IDX(pte));
         for (size_t tidx = 0; tidx < (PAGE_SIZE / 4); ++tidx, ++index) {
             // 跳过对0x0的映射，方便后面的空指针触发 PF 来排错。
             if (index == 0) {
                 continue;
             }
             entry_init(&pte[tidx], index);  // IDX(tidx * PAGE_SIZE) == tidx
-            mem_map[index] = USED;
         }
     }
+
 
     // 设置 cr3 寄存器
     set_cr3((u32)pde);
@@ -233,7 +240,6 @@ void mapping_init(void) {
     // 分页有效
     enable_page();
 
-    DEBUGK("Mapping initilized\n");
 }
 
 // 从bit_map中分配 count 个连续的页
