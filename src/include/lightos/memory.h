@@ -10,18 +10,18 @@
 
 #define MEMORY_BASE 0x100000    // 1M 可用内存起始地址
 
-#define KERNEL_PAGE_DIR 0x0             // 页目录表起始位置（4页个页目录项），学 linux 指向 0，让内核物理线性相等
+#define KERNEL_PAGE_DIR_PADDR 0x0             // 页目录表起始位置（4页个页目录项）
+#define KERNEL_PAGE_DIR_VADDR 0xC0000000// 虚拟地址位置
 #define KERNEL_PAGE_TABLE (PAGE_SIZE)   // 页表PT起始（内存布局：[PD]-[PT]-[PT]...-[kernel_map]）
 #define KERNEL_PAGE_TABLE_COUNT 2       // 页表页数量，2 页映射 8M 给内核
-#define KERNEL_MEM_SIZE (PAGE_SIZE * (PAGE_SIZE / 4) * KERNEL_PAGE_TABLE_COUNT)           // 内核内存大小 8M
-#define KERNEL_MAP_BITS (PAGE_SIZE * (KERNEL_PAGE_TABLE_COUNT + 1))      // 内核虚拟内存位图的起始位置，紧接着两个页表的布局。
+#define KERNEL_MEM_SIZE (PAGE_SIZE * (PAGE_SIZE / 4) * KERNEL_PAGE_TABLE_COUNT)                     // 内核内存大小 8M
+#define KERNEL_MAP_BITS_VADDR (KERNEL_PAGE_DIR_VADDR + PAGE_SIZE * (KERNEL_PAGE_TABLE_COUNT + 1))   // 内核虚拟内存位图的起始位置，紧接着两个页表的布局。
 
 //当前内核占用 8M (KERNEL_PAGE_TABLE_COUNT == 2，一页1K*4K覆盖4M)
 // 用户栈顶地址 128M
 #define USER_STACK_TOP 0x800000
 
-typedef struct page_entry_t
-{
+typedef struct page_entry_t {
     u8 present : 1;  // 在内存中
     u8 write : 1;    // 0 只读 1 可读可写
     u8 user : 1;     // 1 所有人 0 超级用户 DPL < 3
@@ -51,6 +51,9 @@ void memory_map_init(void);
 
 // 初始化内存映射
 void mapping_init(void);
+
+// 将启动时设置的低地址页表映射清空
+void unset_low_mapping(void);
 
 // 分配 count 个连续的内核页
 u32 alloc_kpage(u32 count);

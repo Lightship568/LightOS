@@ -29,11 +29,7 @@ static u32 memory_size = 0;  // 可用内存大小
 static u32 total_pages = 0;  // 所有内存页面数
 static u32 free_pages = 0;   // 空闲内存页数
 
-#define PADDR_TEMP_BOOT_MEMORY_INFO = 0xF000 // 临时用处理结果，不会被内核栈覆盖
-
 #define used_pages (total_pages - free_pages)  // 已用页数
-
-extern void _high_jmp(void); //mapping_init启动分页后跳转到虚拟地址高地址
 
 void memory_init(u32 magic, u32 addr) {
 
@@ -78,7 +74,7 @@ void memory_init(u32 magic, u32 addr) {
         }
         mtag = (multi_tag_mmap_t*)tag;
         entry = mtag->entries;
-        while ((u32)entry < (u32)tag + tag->size){
+        while ((u32)entry < (u32)tag + tag->size) {
             DEBUGK("Memory base 0x%p, size 0x%p, type %d\n", (u32)entry->addr, (u32)entry->len, (u32)entry->type);
             count++;
             if (entry->type == ZONE_VALID && entry->len > memory_size){
@@ -109,6 +105,7 @@ void memory_init(u32 magic, u32 addr) {
 
     DEBUGK("Total pages %d\n", total_pages);
     DEBUGK("Free pages %d\n", free_pages);
+
 }
 
 static u32 start_page_idx = 0;  // 可分配物理内存起始地址页索引
@@ -117,7 +114,7 @@ static u32 mem_map_pages;       // 物理内存数组占用的页数
 
 // mmap 物理内存数组初始化，顺便占用（1M+mmap占用）的物理地址
 void memory_map_init(void) {
-    mem_map = (u8*)memory_base;
+    mem_map = (u8*)memory_base + KERNEL_PAGE_DIR_VADDR; // 增加虚拟地址偏移。
 
     mem_map_pages = div_round_up(total_pages, PAGE_SIZE);
     free_pages -= mem_map_pages;
@@ -136,7 +133,8 @@ void memory_map_init(void) {
     // 初始化内核虚拟内存位图，需要 8 bits 对齐
     // 这里需要跳过mmap，但是为了管理方便，选择了将mmap的bitmap置1了
     u32 length = (IDX(KERNEL_MEM_SIZE) - IDX(MEMORY_BASE)) / 8;
-    bitmap_init(&kernel_map, (u8*)KERNEL_MAP_BITS, length, IDX(MEMORY_BASE));
+    // 增加内核高地址偏移
+    bitmap_init(&kernel_map, (u8*)KERNEL_MAP_BITS_VADDR, length, IDX(MEMORY_BASE)+IDX(KERNEL_PAGE_DIR_VADDR));
     bitmap_scan(&kernel_map, mem_map_pages);
 }
 
@@ -213,22 +211,23 @@ void mapping_init(void) {
      * 
      * 后续为了给内核分配更多空间（1G），需要增加PDE（PT）到 1G/4M = 256 个项。
      */
-    page_entry_t* pde = (page_entry_t*)KERNEL_PAGE_DIR;
+    page_entry_t* pde = (page_entry_t*)KERNEL_PAGE_DIR_PADDR;
     // 清空 pde
     memset(pde, 0, PAGE_SIZE);
 
     u32 index = 0;
     // 设置 pde 前 total_page_table_pages 项目指向顺应页表地址
-    for (size_t i = 0, i2 = 0x300; i < KERNEL_PAGE_TABLE_COUNT; ++i, ++i2) {
+    for (size_t i = 0, i2 = (KERNEL_PAGE_DIR_VADDR >> 22); i < KERNEL_PAGE_TABLE_COUNT; ++i, ++i2) {
         page_entry_t* pte = (page_entry_t*)(KERNEL_PAGE_TABLE + PAGE_SIZE * i);
         memset(pte, 0, PAGE_SIZE);
         entry_init(&pde[i], IDX(pte));
         entry_init(&pde[i2], IDX(pte));
         for (size_t tidx = 0; tidx < (PAGE_SIZE / 4); ++tidx, ++index) {
             // 跳过对0x0的映射，方便后面的空指针触发 PF 来排错。
-            if (index == 0) {
-                continue;
-            }
+            // if (index == 0) {
+            //     continue;
+            // }
+            // 高地址线性地址不需要跳过，后面会清理内核位于低地址的的pde
             entry_init(&pte[tidx], index);  // IDX(tidx * PAGE_SIZE) == tidx
         }
     }
@@ -242,8 +241,13 @@ void mapping_init(void) {
 
 }
 
+// 将启动时设置的低地址页表映射清空
+void unset_low_mapping(void) {
+    memset((void *)KERNEL_PAGE_DIR_VADDR, 0, sizeof(page_entry_t) * KERNEL_PAGE_TABLE_COUNT);
+}
+
 // 从bit_map中分配 count 个连续的页
-// todo 还需要设置mmap
+// todo 设置mmap
 static u32 _alloc_page(bitmap_t* map, u32 count) {
     assert(count > 0);
 
@@ -253,7 +257,8 @@ static u32 _alloc_page(bitmap_t* map, u32 count) {
         panic("alloc page scan failed");
     }
 
-    u32 addr = index << 12;
+    u32 addr = PAGE(index);
+
     // DEBUGK("Scan page 0x%p count %d\n", addr, count);
     return addr;
 }

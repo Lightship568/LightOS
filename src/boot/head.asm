@@ -25,6 +25,7 @@ extern gdt_ptr
 
 extern mapping_init
 extern memory_init
+extern unset_low_mapping
 
 code_selector equ (1 << 3)
 data_selector equ (2 << 3)
@@ -61,7 +62,7 @@ _gdt_refresh_temp:
 
     call gdt_init ; 更新基于全局变量的gdt
     lgdt [gdt_ptr]
-    jmp dword code_selector:_gdt_refresh ; jmp顺便自动转到高地址
+    jmp dword code_selector:_gdt_refresh ; jmp刷新gdt并跳转到高地址
 _gdt_refresh:
 
     call console_init
@@ -70,7 +71,7 @@ _gdt_refresh:
 
     mov esp, 0xC0010000
 
-
+    call unset_low_mapping ; 清空内核在低地址的映射
 
     push L6 ; return address for
     push kernel_init ; return to kernel

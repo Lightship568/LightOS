@@ -1526,7 +1526,13 @@ memset((void*)mem_map_pages, 0, mem_map_pages * PAGE_SIZE);
 
 经过测试，可以顺利迁移到高地址空间！并且gdb可以在mapping_init+跳转后正常中断！
 
+后续修复了许多直接物理内存访问的代码，如`KERNEL_MAP_BITS`以及申请页返回指针需要增加偏移等。
 
+但是目前缺乏 grub 的 multiboot2 规则支持，目前grub应该会自动根据镜像指定的地址加载到3G位置，但是这样启动会 out of memory。可能需要手动指定内核加载地址为0x10000，并设置入口为0x10040。
+
+重新放一张内存布局图
+
+![highlight](.\markdown_img\highlight.png)
 
 
 
