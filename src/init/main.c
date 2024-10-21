@@ -47,10 +47,12 @@ void kernel_init(void) {
 
 // 测试 syscall 和 task
 
+
     syscall_init();
     task_init();
 
     aerna_init();
+    kmap_init();
 
     idle(); //ba
 }

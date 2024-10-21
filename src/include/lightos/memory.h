@@ -17,9 +17,8 @@
 #define KERNEL_MEM_SIZE (PAGE_SIZE * (PAGE_SIZE / 4) * KERNEL_PAGE_TABLE_COUNT)                     // 内核内存大小 8M
 #define KERNEL_MAP_BITS_VADDR (KERNEL_PAGE_DIR_VADDR + PAGE_SIZE * (KERNEL_PAGE_TABLE_COUNT + 1))   // 内核虚拟内存位图的起始位置，紧接着两个页表的布局。
 
-//当前内核占用 8M (KERNEL_PAGE_TABLE_COUNT == 2，一页1K*4K覆盖4M)
-// 用户栈顶地址 128M
-#define USER_STACK_TOP 0x800000
+// 用户栈顶地址 128M（受限于一页的vmap->buf限制）
+#define USER_STACK_TOP 0x8000000
 
 typedef struct page_entry_t {
     u8 present : 1;  // 在内存中
@@ -55,6 +54,12 @@ void mapping_init(void);
 // 将启动时设置的低地址页表映射清空
 void unset_low_mapping(void);
 
+// kmap 初始化
+void kmap_init(void);
+
+u32 kmap(u32 paddr);
+u32 kunmap(u32 vaddr);
+
 // 分配 count 个连续的内核页
 u32 alloc_kpage(u32 count);
 
@@ -62,9 +67,9 @@ u32 alloc_kpage(u32 count);
 void free_kpage(u32 vaddr, u32 count);
 
 // 用户态内存映射管理
-// 将 vaddr 映射物理内存
-void link_page(u32 vaddr);
-// 取消 vaddr 的物理内存映射
-void unlink_page(u32 vaddr);
+// 将用户态 vaddr 映射物理内存
+void link_user_page(u32 vaddr);
+// 取消用户态 vaddr(页对齐) 的物理内存映射（present=false）
+void unlink_user_page(u32 vaddr);
 
 #endif

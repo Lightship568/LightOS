@@ -5,6 +5,7 @@
 #include <lightos/task.h>
 #include <sys/assert.h>
 #include <sys/global.h>
+#include <lightos/memory.h>
 
 extern void keyboard_init(void);
 
@@ -100,9 +101,11 @@ bool get_interrupt_state(void) {
     );
 }
 
-void set_interrupt_state(bool state){
-    if (state) start_interrupt();
-    else close_interrupt();
+void set_interrupt_state(bool state) {
+    if (state)
+        start_interrupt();
+    else
+        close_interrupt();
 }
 
 void start_interrupt(void) {
@@ -183,6 +186,27 @@ void exception_handler(int vector,
     return;
 }
 
+void exception_pf(int vector, u32 edi, u32 esi, u32 ebp, u32 esp, u32 ebx, u32 edx, u32 ecx,
+    u32 eax, u32 gs, u32 fs, u32 es, u32 ds, u32 vector0, u32 error, u32 eip, u32 cs, u32 eflags) {
+
+    // 读取 CR2 寄存器，获取导致缺页的虚拟地址
+    u32 faulting_address;
+    asm volatile("movl %%cr2, %0\n" : "=r"(faulting_address));
+    printk("PF at vaddress 0x%x\n", faulting_address);
+    
+    if (error & 0x1) {
+        // 页存在但有访问权限问题（例如，写入只读页）
+        // 处理权限问题，或杀死进程等操作
+        printk("PF error: Access deined\n");
+    } else {
+        assert(faulting_address <= USER_STACK_TOP);
+        link_user_page(faulting_address);
+    }
+
+    return;
+
+}
+
 // 外中断处理函数（IDT 0X20-0x2f）
 u32 counter = 0;
 void outer_interrupt_handler(int vector) {
@@ -217,6 +241,7 @@ void idt_init(void) {
     for (size_t i = 0; i < 0x20; ++i) {
         trap_handler_table[i] = exception_handler;
     }
+    trap_handler_table[0xE] = exception_pf; // 14 号 PF 中断
     // 将外中断补全
     for (size_t i = 0x20; i < TRAP_TABLE_SIZE; ++i) {
         trap_handler_table[i] = outer_interrupt_handler;

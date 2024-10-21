@@ -6,14 +6,23 @@
 #include <lightos/multiboot2.h>
 #include <sys/assert.h>
 #include <sys/types.h>
+#include <lightos/task.h>
 
 #define ZONE_VALID 1     // ards 可用区域
 #define ZONE_RESERVED 2  // ards 不可用区域
 
+
+#define GET_PAGE(addr) ((u32)addr & 0xFFFFF000) //获取地址所在页的地址
 #define IDX(addr) ((u32)addr >> 12)  // 获取 ards 页索引
 #define PAGE(idx) ((u32)idx << 12)   // 获取 idx 对应的页所在地址
 #define ASSERT_PAGE(addr) assert((addr & 0xfff) == 0)
 #define USED 100  // mem_map 已使用，学 linux 放一个大值
+
+#define LOW_MEM_PADDR_TO_VADDR(paddr) ((u32)paddr + KERNEL_PAGE_DIR_VADDR) // 获取物理地址对应的内核虚拟地址（低地址直接映射部分）
+#define LOW_MEM_VADDR_TO_PADDR(vaddr) ((u32)vaddr - KERNEL_PAGE_DIR_VADDR) // 获取内核虚拟地址对应的物理地址（低地址直接映射部分）
+
+#define PDE_IDX(addr) ((u32)addr >> 22) // 获取pde索引（取高10位）
+#define PTE_IDX(addr) (((u32)addr >> 12) & 0x3ff) // 获取pte索引（取中10位）
 
 bitmap_t kernel_map;
 
@@ -138,42 +147,6 @@ void memory_map_init(void) {
     bitmap_scan(&kernel_map, mem_map_pages);
 }
 
-// 获取一页物理内存
-static u32 get_page() {
-    for (size_t i = start_page_idx; i < total_pages; ++i) {
-        if (!mem_map[i]) {  // 该物理页未被占用
-            mem_map[i] = 1;
-            free_pages--;
-            assert(free_pages >= 0);
-            u32 page_addr = PAGE(i);
-            DEBUGK("Get page 0x%p\n", page_addr);
-            return page_addr;
-        }
-    }
-    panic("Out of Memory!");
-}
-
-// 释放一页物理内存
-static void put_page(u32 addr) {
-    ASSERT_PAGE(addr);
-
-    u32 idx = IDX(addr);
-    // 确保 idx 大于受保护的内存 IDX（1M + mem_map）
-    assert(idx >= start_page_idx && idx < total_pages);
-    // 确保页原本有引用计数
-    assert(mem_map[idx] >= 1);
-
-    mem_map[idx] -= 1;
-    if (!mem_map[idx]) {  // 释放+1
-        free_pages += 1;
-    }
-
-    // 确保空闲页数量在正确范围内
-    assert(free_pages > 0 && free_pages < total_pages);
-
-    DEBUGK("Put page 0x%p\n", addr);
-}
-
 // 将 cr0 寄存器最高位 PG 置为 1，启用分页
 static _inline void enable_page() {
     // 0b1000_0000_0000_0000_0000_0000_0000_0000
@@ -246,32 +219,47 @@ void unset_low_mapping(void) {
     memset((void *)KERNEL_PAGE_DIR_VADDR, 0, sizeof(page_entry_t) * KERNEL_PAGE_TABLE_COUNT);
 }
 
-// 从bit_map中分配 count 个连续的页
-// todo 设置mmap
+// 从bit_map中分配 count 个连续的页，并设置mmap
 static u32 _alloc_page(bitmap_t* map, u32 count) {
     assert(count > 0);
 
     int32 index = bitmap_scan(map, count);
-
     if (index == EOF) {
         panic("alloc page scan failed");
     }
-
-    u32 addr = PAGE(index);
-
-    // DEBUGK("Scan page 0x%p count %d\n", addr, count);
-    return addr;
+    u32 vaddr = PAGE(index);
+    index = index - map->offset + IDX(MEMORY_BASE); // 从0开始的物理地址页的IDX
+    // 设置mmap
+    for (int i = 0; i < count; ++i){
+        assert(!mem_map[index]);
+        mem_map[index] = 1;
+        index++;
+        free_pages--;
+        assert(free_pages >= 0);
+    }
+    return vaddr;
 }
 
 // 与 _alloc_page 相对，重置相应的页
-static void _reset_page(bitmap_t* map, u32 addr, u32 count) {
-    ASSERT_PAGE(addr);
+static void _reset_page(bitmap_t* map, u32 vaddr, u32 count) {
+    ASSERT_PAGE(vaddr);
     assert(count > 0);
-    u32 index = addr >> 12;
+    u32 index = vaddr >> 12;
 
     for (size_t i = 0; i < count; i++) {
         assert(bitmap_test(map, index + i));
         bitmap_set(map, index + i, 0);
+    }
+
+    // 设置mmap
+    index = index - map->offset + IDX(MEMORY_BASE);
+    for (int i = 0; i < count; ++i){
+        assert(mem_map[index]);
+        mem_map[index]--;
+        if (mem_map[index] == 0){
+            free_pages++;
+        }
+        index++;
     }
 }
 
@@ -291,10 +279,221 @@ void free_kpage(u32 vaddr, u32 count) {
     DEBUGK("Free kernel pages 0x%p count %d\n", vaddr, count);
 }
 
-void link_page(u32 vaddr){
+// 获取一页用户内存（phy 8M+），返回物理地址
+static u32 get_user_page() {
+    for (size_t i = IDX(KERNEL_MEM_SIZE); i < total_pages; ++i) {
+        if (!mem_map[i]) {  // 该物理页未被占用
+            mem_map[i] = 1;
+            free_pages--;
+            assert(free_pages >= 0);
+            u32 paddr = PAGE(i);
+            DEBUGK("Get free page 0x%p\n", paddr);
+            return paddr;
+        }
+    }
+    panic("get_user_page: Out of Memory!");
+}
+
+// 释放一页用户内存
+static void put_user_page(u32 paddr) {
+    ASSERT_PAGE(paddr);
+
+    u32 idx = IDX(paddr);
+    // 确保 idx 大于受保护的内存 IDX（1M + mem_map）
+    assert(idx >= IDX(KERNEL_MEM_SIZE) && idx < total_pages);
+    // 确保页原本有引用计数
+    assert(mem_map[idx] >= 1);
+
+    mem_map[idx] -= 1;
+    if (!mem_map[idx]) {  // 释放+1
+        free_pages += 1;
+    }
+
+    // 确保空闲页数量在正确范围内
+    assert(free_pages > 0 && free_pages < total_pages);
+
+    DEBUGK("Put user page paddr 0x%p\n", paddr);
+}
+/********************************************************
+ * 页表操作
+ * 
+ ********************************************************/
+
+// 刷新tlb快表
+static _inline void flush_tlb(u32 vaddr){
+    asm volatile("invlpg (%0)\n" ::"r"(vaddr):"memory");
+}
+
+static page_entry_t* get_pde(){
+    //todo 后续需要从 current 的 pde 中取
+    return (page_entry_t*)KERNEL_PAGE_DIR_VADDR;
+}
+
+// kmap需要维护一个p-v的映射关系 kmap_poll，方便重入检查和unmap操作
+typedef struct kmap_mapping{
+    u32 present : 1;    // 存在标记
+    u32 cnt : 31;       // 映射次数
+    u32 paddr;          // 物理地址
+}kmap_mapping; //8字节，必须被PAGE_SIZE整除！
+
+// mapping_list刚好存放一个pte对应的所有mapping，即1024个
+#define KMAP_POOL_LEN (PAGE_SIZE / sizeof(u32))
+
+static kmap_mapping kmap_pool[KMAP_POOL_LEN]; // 用1024*8（2页）来存储
+static page_entry_t* kmap_pte;
+static u32 kmap_start_vaddr; //kmap映射的起始虚拟地址，当前是3G+8M
+
+#define KMAP_GET_VADDR(index) ((u32)(kmap_start_vaddr + PAGE(index)))
+#define KMAP_GET_INDEX(vaddr) (PTE_IDX((u32)vaddr - kmap_start_vaddr))
+
+void kmap_init(void){
+    kmap_start_vaddr = LOW_MEM_PADDR_TO_VADDR(KERNEL_MEM_SIZE);
+    // 8M+3G偏移，是当前的pde[0x300 + 2]的位置，即当前内核pde的顺延位。
+    page_entry_t* pde_entry = &(get_pde())[PDE_IDX(kmap_start_vaddr)];
+    // 分配一个页的pte专门用来映射kmap
+    kmap_pte = (page_entry_t*)alloc_kpage(1);
+    memset(kmap_pte, 0, PAGE_SIZE);
+    // 设置页表增加kmap映射（此时pte尚未设置具体内容）
+    entry_init(pde_entry, IDX(LOW_MEM_VADDR_TO_PADDR(kmap_pte)));
+    // 同时清空kmap_pool
+    memset(kmap_pool, 0, sizeof(kmap_mapping) * KMAP_POOL_LEN);
+}
+
+// 映射8M以上高物理内存进内核虚拟地址访问
+u32 kmap(u32 paddr){
+    assert(paddr >= KERNEL_MEM_SIZE);
+    ASSERT_PAGE(paddr);    
+    u32 vaddr;
+
+    // 查找kmap_pool中是否已经映射
+    int i = 0;
+    for (; i < KMAP_POOL_LEN; ++i){
+        if (kmap_pool[i].present == 0){
+            break;
+        }
+        if (kmap_pool[i].paddr == paddr){
+            kmap_pool[i].cnt++;
+            return KMAP_GET_VADDR(i);
+        }
+    }
+    if (i == KMAP_POOL_LEN){
+        panic("No enough pte for kmap!\n");
+    }
+    // 没有映射，映射到PAGE(i)的虚拟地址上
+    kmap_pool[i].present = 1;
+    kmap_pool[i].cnt = 1;
+    kmap_pool[i].paddr = paddr;
+    vaddr = KMAP_GET_VADDR(i);
+
+    entry_init(kmap_pte, IDX(paddr));
+    flush_tlb(vaddr);
+
+    DEBUGK("kmap paddr 0x%x at vaddr 0x%x\n", paddr, vaddr);
+    return vaddr;
+}
+
+u32 kunmap(u32 vaddr){
+    DEBUGK("kunmap vaddr 0x%x\n", vaddr);
+    // 保证是kmap分配的虚拟地址范围
+    assert(vaddr >= kmap_start_vaddr && vaddr < kmap_start_vaddr + KMAP_POOL_LEN * PAGE_SIZE);
+    ASSERT_PAGE(vaddr);
+    
+    u32 idx = KMAP_GET_INDEX(vaddr);
+
+    assert(kmap_pool[idx].present);
+    kmap_pool[idx].present = 0;
+    kmap_pool[idx].cnt--;
+    if (kmap_pool[idx].cnt == 0){
+        kmap_pte[idx].present = 0;
+        flush_tlb(vaddr);
+    }
+}
+
+
+// 用户态获取或创建进程pte entry，返回entry虚拟地址，注意调用方需要清理kmap
+static page_entry_t* get_pte(u32 vaddr){
+    page_entry_t* pde = get_pde();
+    u32 idx = PDE_IDX(vaddr);
+    page_entry_t* entry = &pde[idx];
+    u32 paddr_page;
+    u32 kvaddr;
+
+    // 创建pde对应的pt
+    if (!entry->present){
+        paddr_page = get_user_page();
+        entry_init(entry, IDX(paddr_page)); //pde[idx]=paddr_page
+        kvaddr = kmap(paddr_page); // 注意调用方清理kmap
+        memset((void*)kvaddr, 0, PAGE_SIZE);
+        DEBUGK("Create new page table for 0x%x at pde[0x%x]\n", vaddr, idx);
+    } else {
+        paddr_page = PAGE(entry->index);
+        kvaddr = kmap(paddr_page); // 注意调用方清理kmap
+    }
+    
+    idx = PTE_IDX(vaddr);
+    entry = &((page_entry_t*)kvaddr)[idx];
+    return entry;
+}
+
+void link_user_page(u32 vaddr){
+    // 找到该虚拟地址的页表pte
+    task_t *task = get_current();
+    page_entry_t* entry;
+    u32 paddr_page;
+    u32 idx = IDX(vaddr);
+    bitmap_t* vmap = task->vmap;
+
+    entry = get_pte(vaddr);
+
+    // 已经映射，无需操作
+    if (entry->present){
+        assert(bitmap_test(vmap, idx));
+        return;
+    }
+
+    // 设置vmap位图
+    assert(!bitmap_test(vmap, idx));
+    bitmap_set(vmap, idx, true);
+
+    // 为进程页表增加新的物理页
+    paddr_page = get_user_page();
+    entry_init(entry, IDX(paddr_page));
+    flush_tlb(vaddr);
+
+    DEBUGK("Link new user page for 0x%x at 0x%x\n", vaddr, paddr_page);
+
+    kunmap(GET_PAGE(entry)); //清理get_pte的kmap
 
 }
 
-void unlink_page(u32 vaddr){
+void unlink_user_page(u32 vaddr){
 
+    ASSERT_PAGE(vaddr); //传入虚拟地址所在页地址
+
+    // 找到该虚拟地址的页表pte
+    task_t *task = get_current();
+    page_entry_t* entry;
+    u32 idx = IDX(vaddr);
+    bitmap_t* vmap = task->vmap;
+
+    entry = get_pte(vaddr);
+
+    if (!entry->present){
+        assert(!bitmap_test(vmap, idx));
+        return;
+    }
+
+    assert(bitmap_test(vmap, idx));
+    bitmap_set(vmap, idx, false);
+
+    entry->present = 0;
+    flush_tlb(vaddr);
+
+    if (mem_map[entry->index] == 1){
+        put_user_page(PAGE(entry->index));
+    }
+    
+    kunmap(GET_PAGE(entry)); //清理get_pte的kmap
+
+    DEBUGK("Unlink user page for 0x%x at paddr 0x%x\n", vaddr, PAGE(entry->index));
 }
