@@ -11,6 +11,13 @@ header_start:
     dd i386
     dd lenght
     dd -(magic+i386+lenght) ; 校验和
+    ; ; 入口地址
+    dw 3    ; type entry address(manufacture 3.1.6)
+    dw 0    ; flag
+    dd 12   ; size
+    dd 0x10040 ; entry address
+    ; ; 8字节对齐
+    times (8 - ($ - $$) % 8) db 0
     ; 结束标记
     dw 0    ; type
     dw 0    ; flags

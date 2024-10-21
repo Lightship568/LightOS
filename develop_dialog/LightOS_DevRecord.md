@@ -1242,6 +1242,176 @@ grub顺利启动后，由于之前的memory_init需要检查bootloader提供的�
 
 因此需要修改head.asm，设置gdt、段寄存器、esp，以及修改memory_init的启动魔术判断（设置memory_base与memory_size）。
 
+### （更新）内核修改到虚拟地址高地址后的的multiboot2支持
+
+参考手册 https://www.gnu.org/software/grub/manual/multiboot2/multiboot.pdf：
+
+* 3.1.5 The address tag of Multiboot2 header
+
+```bash
++-------------------+
+u16 | type = 2 |
+u16 | flags |
+u32 | size |
+u32 | header_addr |
+u32 | load_addr |
+u32 | load_end_addr |
+u32 | bss_end_addr |
++-------------------+
+```
+
+* 3.1.6 The entry address tag of Multiboot2 header
+
+```bash
++-------------------+
+u16 | type = 3 |
+u16 | flags |
+u32 | size |
+u32 | entry_addr |
++-------------------+
+```
+
+手册确实提到了加载地址tag和入口地址tag，不过这样指定加载地址的话，感觉需要手动计算整个内核二进制的各段加载地址。gpt提供了另一个方案，那就是链接器脚本。
+
+通过链接器将物理地址与虚拟地址分割，并增加multiboot2 header 3.1.6的entry address，就可以实现grub引导功能。（这个脚本倒是改了很久）。
+
+```c
+SECTIONS
+{
+  /* 设置虚拟地址起始点 */
+  . = 0xC0010000;
+
+  /* 定义一个变量来跟踪物理地址 */
+  __physical_base = 0x10000;  /* 物理地址从 0x10000 开始 */
+
+
+  .multiboot2 : AT(__physical_base) 
+  {
+      KEEP(*(.multiboot2))
+  }
+
+  __physical_base = 0x10040; /* .text 物理地址从 0x10040 开始 */
+  . = 0xC0010040;
+
+  .text : AT(__physical_base)
+  {
+      KEEP(*(.text))
+  }
+
+  .rodata ALIGN(4K): 
+  {
+    KEEP(*(.rodata))
+  }
+
+ 
+  .eh_frame ALIGN(4K): 
+  {
+    KEEP(*(.eh_frame))
+  }
+
+  .data ALIGN(4K): 
+  {
+    *(.data)
+  }
+
+  .bss : 
+  {
+    *(.bss)
+  }
+}
+```
+
+记得修改makefile指定加载链接器脚本，并且修改head增加物理地址的入口
+
+```makefile
+LDFLAGS:= -m elf_i386 \
+		-static \
+		-T $(SRC)/utils/kernel.ld  # 引用链接器脚本文件
+```
+
+```assembly
+; multiboot2 header
+magic   equ 0xe85250d6
+i386    equ 0
+lenght  equ header_end - header_start
+
+section .multiboot2
+header_start:
+    dd magic
+    dd i386
+    dd lenght
+    dd -(magic+i386+lenght) ; 校验和
+    ; 入口地址
+    dw 3    ; type entry address(manufacture 3.1.6)
+    dw 0    ; flag
+    dd 12   ; size
+    dd 0x100040 ; entry address
+    ; 结束标记
+    dw 0    ; type
+    dw 0    ; flags
+    dd 8    ; size
+header_end:
+```
+
+编译成功，但grub启动报错`unsupported tag 0x8 .`搜了一下：
+
+* https://forum.osdev.org/viewtopic.php?t=27602
+
+原来是grub需要在每个tag之间增加一个8字节对齐。不知道为何 .align 等相关的命令无法使用，只能用times了，如下：
+
+```assembly
+; multiboot2 header
+magic   equ 0xe85250d6
+i386    equ 0
+lenght  equ header_end - header_start
+
+section .multiboot2
+header_start:
+    dd magic
+    dd i386
+    dd lenght
+    dd -(magic+i386+lenght) ; 校验和
+    ; 入口地址
+    dw 3    ; type entry address(manufacture 3.1.6)
+    dw 0    ; flag
+    dd 12   ; size
+    dd 0x100040 ; entry address
+    ; 8字节对齐
+    times (8 - ($ - $$) % 8) db 0
+    ; 结束标记
+    dw 0    ; type
+    dw 0    ; flags
+    dd 8    ; size
+header_end:
+```
+
+最后终于将elf调整为下面的格式，虚拟地址为物理地址+3G
+
+```bash
+> readelf -l kernel.bin
+Elf file type is EXEC (Executable file)
+Entry point 0x10040
+There are 4 program headers, starting at offset 52
+
+Program Headers:
+  Type           Offset   VirtAddr   PhysAddr   FileSiz MemSiz  Flg Align
+  LOAD           0x001000 0xc0010000 0x00010000 0x05bb7 0x05bb7 R E 0x1000
+  LOAD           0x007000 0xc0016000 0x00016000 0x02558 0x02558 R   0x1000
+  LOAD           0x00a000 0xc0019000 0x00019000 0x00340 0x04494 RW  0x1000
+  GNU_STACK      0x000000 0x00000000 0x00000000 0x00000 0x00000 RWE 0x10
+
+ Section to Segment mapping:
+  Segment Sections...
+   00     .multiboot2 .text #这里通过objdump -x 可以看出确实存在0x40的偏移，因此不用担心
+   01     .rodata .eh_frame 
+   02     .data .bss 
+   03
+```
+
+此外，我想通过设置入口点`ENTRY(__physical_base)`的方式，尝试让grub直接根据入口启动，所以想删掉header中的entry address，但是一旦加了入口点的0x10040，启动就会报错入口不在段中。所以看来想要自动跳转，需要虚拟地址=物理地址，因为需要保证入口点在段中且在低地址。那么最后只能删掉ENTRY，并必须要添加这个type=3的tag。
+
+再次，qemu和grub都可以顺利启动高地址内核了！
+
 # 键盘中断&中断思考
 
 0x21 键盘中断向量，实现起来也非常简单，就是将0x21的interrupt_handler填好就可以。

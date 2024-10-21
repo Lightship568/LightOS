@@ -63,9 +63,10 @@ $(BUILD)/lib/%.o: $(SRC)/lib/%.asm
 
 # 链接时控制内存布局，增加 multiboot2 header
 LDFLAGS:= -m elf_i386 \
-		-static \
-		-Ttext $(ENTRYPOINT)\
-		--section-start=.multiboot2=$(MULTIBOOT2)
+		-static
+LDFLAGS+= -T$(SRC)/utils/kernel.ld # 引用链接器脚本文件
+# LDFLAGS+= -Ttext $(ENTRYPOINT) --section-start=.multiboot2=$(MULTIBOOT2)
+
 LDFLAGS:=$(strip ${LDFLAGS})
 
 # kernel
