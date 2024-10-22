@@ -12,8 +12,8 @@
 
 #define NR_TASKS 64
 
-#define KERNEL_USER 0
-#define NORMAL_USER 1
+#define KERNEL_RING0    0
+#define USER_RING3      1
 
 #define TASK_NAME_LEN 16
 
@@ -82,6 +82,7 @@ typedef struct task_struct{
     list_node_t node;               // 链表
     struct bitmap_t *vmap;          // 进程虚拟内存位图
     struct tss_t tss;               // TSS
+    u32 brk;                        // 进程堆内存最高地址
     u32 magic;                      // 检测内核栈溢出（溢出到 PCB 就寄了）
 } task_t;
 

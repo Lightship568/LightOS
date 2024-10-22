@@ -4,6 +4,7 @@
 #include <lightos/task.h>
 #include <lib/debug.h>
 #include <lightos/console.h>
+#include <lightos/memory.h>
 
 u32 nr_syscall = NR_SYSCALL;
 handler_t syscall_table[NR_SYSCALL];
@@ -30,5 +31,6 @@ void syscall_init(void){
     syscall_table[SYS_NR_YIELD] = sys_yield;
     syscall_table[SYS_NR_SLEEP] = sys_sleep;
     syscall_table[SYS_NR_WRITE] = sys_write;
+    syscall_table[SYS_NR_BRK]   = sys_brk;
     DEBUGK("Syscall initialized\n");
 }

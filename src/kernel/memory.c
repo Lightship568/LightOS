@@ -25,6 +25,11 @@
 
 bitmap_t kernel_map;
 
+/******************************************************************************************************************
+ * 内存管理初始化
+ * 
+ *****************************************************************************************************************/
+
 // BIOS 内存检测结果结构体
 typedef struct ards_t {
     u64 base;  // 内存基地址
@@ -156,12 +161,6 @@ static _inline void enable_page() {
         "movl %eax, %cr0\n");
 }
 
-// 设置 cr3 寄存器，参数是页目录的地址
-void set_cr3(u32 pde) {
-    ASSERT_PAGE(pde);
-    asm volatile("movl %%eax, %%cr3\n" ::"a"(pde));
-}
-
 // 初始化页表项
 static void entry_init(page_entry_t* entry, u32 index) {
     *(u32*)entry = 0;
@@ -216,6 +215,18 @@ void mapping_init(void) {
 // 将启动时设置的低地址页表映射清空
 void unset_low_mapping(void) {
     memset((void *)KERNEL_PAGE_DIR_VADDR, 0, sizeof(page_entry_t) * KERNEL_PAGE_TABLE_COUNT);
+}
+
+
+/******************************************************************************************************************
+ * 内核工具函数
+ * 
+ * ****************************************************************************************************************/
+
+// 设置 cr3 寄存器，参数是页目录的地址
+void set_cr3(u32 pde) {
+    ASSERT_PAGE(pde);
+    asm volatile("movl %%eax, %%cr3\n" ::"a"(pde));
 }
 
 // 从bit_map中分配 count 个连续的页，并设置mmap
@@ -313,10 +324,10 @@ static void put_user_page(u32 paddr) {
 
     DEBUGK("Put user page paddr 0x%p\n", paddr);
 }
-/********************************************************
+/****************************************************************************************************************
  * 页表操作
  * 
- ********************************************************/
+ ****************************************************************************************************************/
 
 // 刷新tlb快表
 static _inline void flush_tlb(u32 vaddr){
@@ -501,4 +512,36 @@ void unlink_user_page(u32 vaddr){
     kunmap(GET_PAGE(entry)); //清理get_pte的kmap
 
     DEBUGK("Unlink user page for 0x%x at paddr 0x%x\n", vaddr, PAGE(entry->index));
+}
+
+/******************************************************************************************************************
+ * 系统调用
+ *****************************************************************************************************************/
+
+int32 sys_brk(void* addr){
+    u32 brk = (u32)addr;
+    ASSERT_PAGE(brk);
+
+    task_t* task = get_current();
+    
+    // 确保是用户进程
+    assert(task->uid == USER_RING3);
+
+    // brk 与栈重叠
+    if (brk >= USER_STACK_BOTTOM){
+        DEBUGK("brk >= USER_STACK_BOTTOM\n");
+        return -1;
+    }
+
+    if (task->brk > brk){
+        for (; brk < task->brk; brk += PAGE_SIZE){
+            unlink_user_page(brk);
+        }
+    } else if ((brk - task->brk) > PAGE(free_pages)){
+        DEBUGK("brk out of memory\n");
+        return -1;
+    }
+
+    task->brk = brk;
+    return 0;
 }

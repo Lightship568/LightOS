@@ -157,6 +157,7 @@ pid_t task_create(void (*task_ptr)(void),
     task->ticks = priority;
     task->priority = priority;
     task->uid = uid;
+    task->brk = 0;
     task->magic = LIGHTOS_MAGIC;
 
     task->tss.eip = (u32)task_ptr;
@@ -173,13 +174,13 @@ pid_t task_create(void (*task_ptr)(void),
 
 void task_setup(void) {
     pid_t pid;
-    pid = task_create(idle, "idle", 1, KERNEL_USER);
+    pid = task_create(idle, "idle", 1, KERNEL_RING0);
     task_list[pid]->pde = KERNEL_PAGE_DIR_PADDR;
-    pid = task_create(init_kthread, "init", 5, KERNEL_USER);
+    pid = task_create(init_kthread, "init", 5, KERNEL_RING0);
     task_list[pid]->pde = KERNEL_PAGE_DIR_PADDR; // 暂时不应该切换页表，先让内核完成所有初始化
-    // pid = task_create(task_reader1, "reader 1", 5, KERNEL_USER);
-    // pid = task_create(task_reader2, "reader 2", 5, KERNEL_USER);
-    // pid = task_create(task_writer, "writer", 5, KERNEL_USER);
+    // pid = task_create(task_reader1, "reader 1", 5, KERNEL_RING0);
+    // pid = task_create(task_reader2, "reader 2", 5, KERNEL_RING0);
+    // pid = task_create(task_writer, "writer", 5, KERNEL_RING0);
 
     current = task_list[0]; // IDLE
 }

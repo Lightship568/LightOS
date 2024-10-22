@@ -187,12 +187,17 @@ void exception_handler(int vector,
 }
 
 void exception_pf(int vector, u32 edi, u32 esi, u32 ebp, u32 esp, u32 ebx, u32 edx, u32 ecx,
-    u32 eax, u32 gs, u32 fs, u32 es, u32 ds, u32 vector0, u32 error, u32 eip, u32 cs, u32 eflags) {
+    u32 eax, u32 gs, u32 fs, u32 es, u32 ds, u32 vector0, u32 error, u32 eip, u32 cs, u32 eflags, u32 esp3, u32 ss3) {
 
     // 读取 CR2 寄存器，获取导致缺页的虚拟地址
     u32 faulting_address;
+    task_t* task;
     asm volatile("movl %%cr2, %0\n" : "=r"(faulting_address));
     printk("PF at vaddress 0x%x\n", faulting_address);
+
+    task = get_current();
+    // 一定是用户态才能进入 PF，如果是内核PF，理应panic
+    assert(task->uid == USER_RING3);
     
     if (error & 0x1) {
         // 页存在但有访问权限问题（例如，写入只读页）
@@ -200,6 +205,16 @@ void exception_pf(int vector, u32 edi, u32 esi, u32 ebp, u32 esp, u32 ebx, u32 e
         printk("PF error: Access deined\n");
     } else {
         assert(faulting_address <= USER_STACK_TOP);
+        if (esp3 <= USER_STACK_BOTTOM){ // 用户爆栈
+            // todo SIGSEGV 终止进程
+            panic("user stack overflow at esp: 0x%x!\n", esp3);
+        } else if (faulting_address > USER_STACK_BOTTOM){
+            // pass
+        } else if (faulting_address > task->brk){ //用户访问未映射高地址
+            panic("user access unmapped memory at 0x%x!\n", faulting_address);
+        } else {
+            // pass
+        }
         link_user_page(faulting_address);
     }
 

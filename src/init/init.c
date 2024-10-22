@@ -30,8 +30,11 @@ void move_to_user_mode(void){
     bitmap_init(task->vmap, buf, PAGE_SIZE, 0);
 
     // 切换为独立页表（init自己拷贝自己）
-    copy_pde(task_list[current->pid]);
-    set_cr3(current->pde);
+    copy_pde(task);
+    set_cr3(task->pde);
+
+    // 切换 uid 为用户进程
+    task->uid = USER_RING3;
 
     iframe->vector = 0x20;
     iframe->edi = 1;
@@ -68,13 +71,31 @@ void move_to_user_mode(void){
 extern int printf(const char *fmt, ...);
 
 void init_uthread(void){
-    char test[PAGE_SIZE];
-    printf("write in 0x%p\n", test);
-    test[0] = 1;
-    // init_uthread(); 递归测试，耗尽所有用户态 8M~32M 物理内存触发panic
+
+    char stack[PAGE_SIZE];
+    stack[0] = 1;
+
+    char* ptr = (char*)0x101000; //1M测试
+    brk(ptr);
+
+    ptr -= 0x1000;
+    printf("write 0x%p\n", ptr);
+    ptr[0] = 0xff;
+
+    ptr = (char*)0x201000;
+    brk(ptr);
+
+    ptr -= 0x1000;
+    printf("write 0x%p\n", ptr);
+    ptr[0] = 0xff;
+
+    // 访问未映射的50M，正常panic
+    // ptr = (char*)(1024*1024*50);
+    // ptr[0] = 0xff;
+    
     while (true){
-        sleep(1000);
         printf("sleep...\n");
+        sleep(1000);
     }
 }
 

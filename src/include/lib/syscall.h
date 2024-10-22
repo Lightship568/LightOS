@@ -3,7 +3,7 @@
 
 #include <sys/types.h>
 
-#define NR_SYSCALL 64
+#define NR_SYSCALL 256
 
 typedef enum syscall_t
 {
@@ -80,5 +80,6 @@ typedef enum syscall_t
 void yield(void);
 void sleep(u32 ms);
 int32 write(fd_t fd, char *buf, u32 len);
+int32 brk(void* addr);
 
 #endif
