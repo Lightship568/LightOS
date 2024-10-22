@@ -54,9 +54,17 @@ void sleep(u32 ms){
 }
 
 int32 write(fd_t fd, char *buf, u32 len){
-    _syscall3(SYS_NR_WRITE, fd, (u32)buf, len);
+    return _syscall3(SYS_NR_WRITE, fd, (u32)buf, len);
 }
 
 int32 brk(void* addr){
-    _syscall1(SYS_NR_BRK, (u32)addr);
+    return _syscall1(SYS_NR_BRK, (u32)addr);
+}
+
+pid_t getpid(){
+    return _syscall0(SYS_NR_GETPID);
+}
+
+pid_t getppid(){
+    return _syscall0(SYS_NR_GETPPID);
 }

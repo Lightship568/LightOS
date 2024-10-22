@@ -28,9 +28,11 @@ void syscall_init(void){
     for (size_t i = 0; i < NR_SYSCALL; ++i){
         syscall_table[i] = sys_default;
     }
-    syscall_table[SYS_NR_YIELD] = sys_yield;
-    syscall_table[SYS_NR_SLEEP] = sys_sleep;
-    syscall_table[SYS_NR_WRITE] = sys_write;
-    syscall_table[SYS_NR_BRK]   = sys_brk;
+    syscall_table[SYS_NR_YIELD]     = sys_yield;
+    syscall_table[SYS_NR_SLEEP]     = sys_sleep;
+    syscall_table[SYS_NR_WRITE]     = sys_write;
+    syscall_table[SYS_NR_BRK]       = sys_brk;
+    syscall_table[SYS_NR_GETPID]    = sys_getpid;
+    syscall_table[SYS_NR_GETPPID]   = sys_getppid;
     DEBUGK("Syscall initialized\n");
 }

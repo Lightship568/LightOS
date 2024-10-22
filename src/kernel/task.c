@@ -144,8 +144,8 @@ pid_t task_create(void (*task_ptr)(void),
     pid_t pid = get_free_task();
     task_t* task = task_list[pid];
     memset(task, 0, PAGE_SIZE);
+
     task->pid = pid;
-    // todo stack 要设置一些中断进入内核栈的压入值？
 
     // todo wstrcpy name
     assert(sizeof(name) <= 16);
@@ -198,8 +198,13 @@ void sys_yield(void) {
     schedule();
 }
 
-void sys_block(task_t* task, list_t* blist, task_state_t state) {}
-void sys_unblock(task_t* task) {}
+u32 sys_getpid() {
+    return get_current()->pid;
+}
+
+u32 sys_getppid() {
+    return get_current()->ppid;
+}
 
 void sys_sleep(u32 ms) {
     assert(!get_interrupt_state());  // 确保是系统调用进来关中断的状态

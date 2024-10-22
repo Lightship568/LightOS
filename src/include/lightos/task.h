@@ -76,6 +76,7 @@ typedef struct task_struct{
     u32 ticks;                      // 剩余时间片 
     u32 jiffies;                    // 上次执行时全局时间片
     pid_t pid;                      // 任务ID
+    pid_t ppid;                     // 父任务ID
     char name[TASK_NAME_LEN];       // 任务名
     u32 uid;                        // 用户ID
     u32 pde;                        // 页目录物理地址
@@ -129,6 +130,10 @@ void sys_yield(void);
 
 // 系统调用 sys_sleep
 void sys_sleep(u32 ms);
+
+// 系统调用
+u32 sys_getpid();
+u32 sys_getppid();
 
 // 非系统调用，但与sleep对应，被clock调用
 void task_wakeup(void);

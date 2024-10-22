@@ -89,6 +89,9 @@ void init_uthread(void){
     printf("write 0x%p\n", ptr);
     ptr[0] = 0xff;
 
+    printf("pid: %d\n", getpid());
+    printf("ppid: %d\n", getppid());
+
     // 访问未映射的50M，正常panic
     // ptr = (char*)(1024*1024*50);
     // ptr[0] = 0xff;
