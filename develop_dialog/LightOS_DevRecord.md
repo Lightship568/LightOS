@@ -1242,7 +1242,7 @@ grub顺利启动后，由于之前的memory_init需要检查bootloader提供的�
 
 因此需要修改head.asm，设置gdt、段寄存器、esp，以及修改memory_init的启动魔术判断（设置memory_base与memory_size）。
 
-### （更新）内核修改到虚拟地址高地址后的的multiboot2支持
+### （更新）内核修改到虚拟地址高地址后的multiboot2支持
 
 参考手册 https://www.gnu.org/software/grub/manual/multiboot2/multiboot.pdf：
 

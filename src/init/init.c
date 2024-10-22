@@ -29,6 +29,9 @@ void move_to_user_mode(void){
     void* buf = (void*)alloc_kpage(1);      // todo free_kpage
     bitmap_init(task->vmap, buf, PAGE_SIZE, 0);
 
+    // 切换为独立页表（init自己拷贝自己）
+    copy_pde(task_list[current->pid]);
+    set_cr3(current->pde);
 
     iframe->vector = 0x20;
     iframe->edi = 1;
@@ -69,6 +72,10 @@ void init_uthread(void){
     printf("write in 0x%p\n", test);
     test[0] = 1;
     // init_uthread(); 递归测试，耗尽所有用户态 8M~32M 物理内存触发panic
+    while (true){
+        sleep(1000);
+        printf("sleep...\n");
+    }
 }
 
 

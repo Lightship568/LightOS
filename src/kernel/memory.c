@@ -6,7 +6,6 @@
 #include <lightos/multiboot2.h>
 #include <sys/assert.h>
 #include <sys/types.h>
-#include <lightos/task.h>
 
 #define ZONE_VALID 1     // ards 可用区域
 #define ZONE_RESERVED 2  // ards 不可用区域
@@ -325,8 +324,15 @@ static _inline void flush_tlb(u32 vaddr){
 }
 
 static page_entry_t* get_pde(){
-    //todo 后续需要从 current 的 pde 中取
-    return (page_entry_t*)KERNEL_PAGE_DIR_VADDR;
+    //需要从 current 的 pde 中取虚拟地址
+    return (page_entry_t*)(current->pde + KERNEL_VADDR_OFFSET);
+}
+
+void copy_pde(task_t* target_task){
+    page_entry_t* pde = (page_entry_t*)alloc_kpage(1);
+    // 拷贝页表
+    memcpy((void*)pde, (void*)(current->pde + KERNEL_VADDR_OFFSET), PAGE_SIZE);
+    target_task->pde = (u32)pde - KERNEL_VADDR_OFFSET;
 }
 
 // kmap需要维护一个p-v的映射关系 kmap_poll，方便重入检查和unmap操作

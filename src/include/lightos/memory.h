@@ -7,11 +7,13 @@
 
 #include <sys/types.h>
 #include <sys/global.h>
+#include <lightos/task.h>
 
 #define MEMORY_BASE 0x100000    // 1M 可用内存起始地址
 
-#define KERNEL_PAGE_DIR_PADDR 0x0             // 页目录表起始位置（4页个页目录项）
-#define KERNEL_PAGE_DIR_VADDR 0xC0000000// 虚拟地址位置
+#define KERNEL_PAGE_DIR_PADDR 0x0                   // 页目录表起始位置（4页个页目录项）
+#define KERNEL_PAGE_DIR_VADDR 0xC0000000            // 虚拟地址位置
+#define KERNEL_VADDR_OFFSET KERNEL_PAGE_DIR_VADDR   // 内核虚拟地址偏移
 #define KERNEL_PAGE_TABLE (PAGE_SIZE)   // 页表PT起始（内存布局：[PD]-[PT]-[PT]...-[kernel_map]）
 #define KERNEL_PAGE_TABLE_COUNT 2       // 页表页数量，2 页映射 8M 给内核
 #define KERNEL_MEM_SIZE (PAGE_SIZE * (PAGE_SIZE / 4) * KERNEL_PAGE_TABLE_COUNT)                     // 内核内存大小 8M
@@ -38,6 +40,9 @@ typedef struct page_entry_t {
 
 // 设置 cr3 寄存器，参数是页目录的地址
 void set_cr3(u32 pde);    
+
+// 拷贝 current 进程 pde 到 target_task->pde
+void copy_pde(task_t* target_task);
 
 // 主要是通过分析 bios 内存检测获取的内存信息计算页数据，参数来自 head.s 的 push
 void memory_init(u32 magic, u32 addr);
