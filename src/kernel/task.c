@@ -174,10 +174,12 @@ pid_t task_create(void (*task_ptr)(void),
 void task_setup(void) {
     pid_t pid;
     pid = task_create(idle, "idle", 1, KERNEL_USER);
+    task_list[pid]->pde = KERNEL_PAGE_DIR_PADDR;
+    pid = task_create(init_kthread, "init", 5, KERNEL_USER);
+    task_list[pid]->pde = KERNEL_PAGE_DIR_PADDR;
     // pid = task_create(task_reader1, "reader 1", 5, KERNEL_USER);
     // pid = task_create(task_reader2, "reader 2", 5, KERNEL_USER);
     // pid = task_create(task_writer, "writer", 5, KERNEL_USER);
-    pid = task_create(init_kthread, "init", 5, KERNEL_USER);
 
     current = task_list[0]; // IDLE
 }
@@ -188,6 +190,7 @@ void task_init(void) {
     mutex_init(&mutex_test);
     rwlock_init(&rwlock_test);
     task_setup();
+    DEBUGK("Task initialized\n");
 }
 
 void sys_yield(void) {

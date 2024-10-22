@@ -53,7 +53,7 @@ void move_to_user_mode(void){
     iframe->eip = (u32)init_uthread; // 当前的 GDT 中 USER_CODE 是可以执行内核代码的
     iframe->eflags = (0 << 12 | 0b10 | 1 << 9); //IOPL=0, 固定1, IF中断开启
     // iframe->esp = ((u32)alloc_kpage(1) + PAGE_SIZE); //暂时用一个内核页放用户栈
-    iframe->esp = USER_STACK_TOP - 1;
+    iframe->esp = USER_STACK_TOP;
 
     asm volatile(
         "movl %0, %%esp\n"
@@ -65,17 +65,10 @@ void move_to_user_mode(void){
 extern int printf(const char *fmt, ...);
 
 void init_uthread(void){
-    int cnt = 0;
-    int ret = 0;
-    int len = PAGE_SIZE*2;
-    char test[PAGE_SIZE*2];
-    while (true){
-        for(int i = 0; i < len; i+=1024){
-            printf("write byte in test[%d]\n", i);
-            test[i] = 'a';
-        }
-        while(true);
-    }
+    char test[PAGE_SIZE];
+    printf("write in 0x%p\n", test);
+    test[0] = 1;
+    // init_uthread(); 递归测试，耗尽所有用户态 8M~32M 物理内存触发panic
 }
 
 

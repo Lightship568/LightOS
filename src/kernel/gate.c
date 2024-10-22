@@ -30,4 +30,5 @@ void syscall_init(void){
     syscall_table[SYS_NR_YIELD] = sys_yield;
     syscall_table[SYS_NR_SLEEP] = sys_sleep;
     syscall_table[SYS_NR_WRITE] = sys_write;
+    DEBUGK("Syscall initialized\n");
 }

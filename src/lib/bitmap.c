@@ -5,8 +5,8 @@
 // 构造位图
 void _bitmap_make(bitmap_t* map, char* bits, u32 length, u32 offset) {
     map->bits = bits;
-    map->length = length;
-    map->offset = offset;
+    map->length = length; // 字节数
+    map->offset = offset; // 起始偏移
 }
 
 // 位图初始化，全部置为 0
@@ -34,10 +34,8 @@ bool bitmap_test(bitmap_t* map, idx_t index) {
     return (map->bits[bytes] & (1 << bits));
 }
 
-// 设置位图某位的值
+// 设置位图某位的值（传入index是页的索引，即>>12）
 void bitmap_set(bitmap_t* map, idx_t index, bool value) {
-    // value 必须是二值的
-    assert(value == 0 || value == 1);
 
     assert(index >= map->offset);
 
@@ -46,6 +44,8 @@ void bitmap_set(bitmap_t* map, idx_t index, bool value) {
 
     // 位图数组中的字节
     u32 bytes = idx / 8;
+
+    assert(bytes < map->length);
 
     // 该字节中的那一位
     u8 bits = idx % 8;

@@ -1,6 +1,7 @@
 #include <sys/global.h>
 #include <lightos/task.h>
 #include <sys/assert.h>
+#include <lightos/memory.h>
 
 /**
  * 软件实现上下文切换功能
@@ -51,6 +52,8 @@ void switch_to(int n) {
 
     // 切换current
     current = task_list[n];
+    // 切换cr3
+    set_cr3(current->pde);
 
     // 切换tdr指向的tss.esp0，使得ring3中断可以进入正确的内核栈
     tss.esp0 = current->tss.esp0;

@@ -3,6 +3,7 @@
 #include <lib/string.h>
 #include <lib/debug.h>
 #include <lib/mutex.h>
+#include <lightos/memory.h>
 
 #define CRT_ADDR_REG 0x3D4 // CRT(6845)索引寄存器
 #define CRT_DATA_REG 0x3D5 // CRT(6845)数据寄存器
@@ -12,9 +13,9 @@
 #define CRT_CURSOR_H 0xE     // 光标位置 - 高位
 #define CRT_CURSOR_L 0xF     // 光标位置 - 低位
 
-#define SCREEN_MEM_BASE 0xB8000              // 显卡内存起始位置
-#define SCREEN_MEM_SIZE 0x4000               // 显卡内存大小 16k
-#define SCREEN_MEM_DIVIDE 0x3000               // 滚屏分割点，滚屏超过MEM_END后拷贝后3/4（0x3000/0x4000）至开头
+#define SCREEN_MEM_BASE (0xB8000 + KERNEL_PAGE_DIR_VADDR)       // 显卡内存起始位置
+#define SCREEN_MEM_SIZE 0x4000                                  // 显卡内存大小 16k
+#define SCREEN_MEM_DIVIDE 0x3000                                // 滚屏分割点，滚屏超过MEM_END后拷贝后3/4（0x3000/0x4000）至开头
 #define SCREEN_MEM_END (SCREEN_MEM_BASE + SCREEN_MEM_SIZE) // 显卡内存结束位置
 #define WIDTH 80                      // 屏幕文本列数
 #define HEIGHT 25                     // 屏幕文本行数

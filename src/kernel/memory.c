@@ -291,7 +291,7 @@ static u32 get_user_page() {
             return paddr;
         }
     }
-    panic("get_user_page: Out of Memory!");
+    panic("get_user_page: Out of Memory!\nTotal memory: 0x%x bytes\n", total_pages * PAGE_SIZE);
 }
 
 // 释放一页用户内存
@@ -357,6 +357,7 @@ void kmap_init(void){
     entry_init(pde_entry, IDX(LOW_MEM_VADDR_TO_PADDR(kmap_pte)));
     // 同时清空kmap_pool
     memset(kmap_pool, 0, sizeof(kmap_mapping) * KMAP_POOL_LEN);
+    DEBUGK("Kmap initialized\n");
 }
 
 // 映射8M以上高物理内存进内核虚拟地址访问
@@ -489,9 +490,7 @@ void unlink_user_page(u32 vaddr){
     entry->present = 0;
     flush_tlb(vaddr);
 
-    if (mem_map[entry->index] == 1){
-        put_user_page(PAGE(entry->index));
-    }
+    put_user_page(PAGE(entry->index));
     
     kunmap(GET_PAGE(entry)); //清理get_pte的kmap
 

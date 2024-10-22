@@ -2,6 +2,7 @@
 #include <lightos/memory.h>
 #include <sys/assert.h>
 #include <lib/string.h>
+#include <lib/debug.h>
 #include <lib/print.h>
 #include <lib/mutex.h>
 
@@ -133,4 +134,5 @@ void aerna_init(void){
     list_init(&free_list);
     list_init(&used_list);
     mutex_init(&arena_lock);
+    DEBUGK("Aerna initialized\n");
 }

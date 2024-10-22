@@ -18,7 +18,7 @@
 #define KERNEL_MAP_BITS_VADDR (KERNEL_PAGE_DIR_VADDR + PAGE_SIZE * (KERNEL_PAGE_TABLE_COUNT + 1))   // 内核虚拟内存位图的起始位置，紧接着两个页表的布局。
 
 // 用户栈顶地址 128M（受限于一页的vmap->buf限制）
-#define USER_STACK_TOP 0x8000000
+#define USER_STACK_TOP 0x8000000-1
 
 typedef struct page_entry_t {
     u8 present : 1;  // 在内存中
@@ -35,9 +35,6 @@ typedef struct page_entry_t {
     u8 readonly : 1; // 只读内存页，与 CPU 无关
     u32 index : 20;  // 页索引
 } _packed page_entry_t;
-
-// 得到 cr3 寄存器
-u32 get_cr3();
 
 // 设置 cr3 寄存器，参数是页目录的地址
 void set_cr3(u32 pde);    

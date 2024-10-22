@@ -54,5 +54,5 @@ void kernel_init(void) {
     aerna_init();
     kmap_init();
 
-    idle(); //ba
+    idle(); //set stack & sti
 }
