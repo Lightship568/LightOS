@@ -135,6 +135,9 @@ void sys_sleep(u32 ms);
 u32 sys_getpid();
 u32 sys_getppid();
 
+// 系统调用 fork
+u32 sys_fork();
+
 // 非系统调用，但与sleep对应，被clock调用
 void task_wakeup(void);
 

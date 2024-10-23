@@ -45,6 +45,8 @@ void set_cr3(u32 pde);
 
 // 拷贝 current 进程 pde 到 target_task->pde
 void copy_pde(task_t* target_task);
+// 拷贝 current 进程 pd 和所有有效 pt 到 target_task（并设置pde）
+void copy_pte(task_t* target_task);
 
 // 主要是通过分析 bios 内存检测获取的内存信息计算页数据，参数来自 head.s 的 push
 void memory_init(u32 magic, u32 addr);

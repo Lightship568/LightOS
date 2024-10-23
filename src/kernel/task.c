@@ -1,5 +1,6 @@
 #include <lib/debug.h>
 #include <lib/list.h>
+#include <lib/mutex.h>
 #include <lib/print.h>
 #include <lib/stdlib.h>
 #include <lib/string.h>
@@ -9,7 +10,8 @@
 #include <sys/assert.h>
 #include <sys/global.h>
 #include <sys/types.h>
-#include <lib/mutex.h>
+#include <lib/bitmap.h>
+#include <lib/arena.h>
 
 extern u32 keyboard_read(char* buf, u32 count);
 extern void init_kthread(void);
@@ -19,10 +21,10 @@ task_t* current = (task_t*)NULL;
 extern u32 volatile jiffies;  // clock.c 时间片数
 extern u32 jiffy;             // clock.c 时钟中断的ms间隔
 
-static list_t sleep_list;  // 睡眠任务链表
-static list_t block_list;  // 阻塞任务链表
-static mutex_t mutex_test; // 测试用的互斥量
-static rwlock_t rwlock_test; // 测试用的读写锁
+static list_t sleep_list;     // 睡眠任务链表
+static list_t block_list;     // 阻塞任务链表
+static mutex_t mutex_test;    // 测试用的互斥量
+static rwlock_t rwlock_test;  // 测试用的读写锁
 
 task_t* get_current() {
     return current;
@@ -58,8 +60,8 @@ void schedule(void) {
         n %= NR_TASKS;
         if (n != 0 && task_list[n] != NULL && task_list[n]->ticks &&
             task_list[n]->state == TASK_READY) {
-                target = n;
-                break;
+            target = n;
+            break;
         }
     }
     switch_to(target);
@@ -70,7 +72,8 @@ void task1() {  // 73402
     while (true) {
         for (int j = 0; j < 5; ++j) {
             printk("A");
-            for (int i = 0; i < INTERVEL; ++i);
+            for (int i = 0; i < INTERVEL; ++i)
+                ;
         }
         // yield();
     }
@@ -80,7 +83,8 @@ void task2() {  // 73453
     while (true) {
         for (int j = 0; j < 5; ++j) {
             printk("B");
-            for (int i = 0; i < INTERVEL; ++i);
+            for (int i = 0; i < INTERVEL; ++i)
+                ;
         }
         // yield();
     }
@@ -117,7 +121,7 @@ void task_writer() {
         rwlock_write_unlock(&rwlock_test);
     }
 }
-void idle(){
+void idle() {
     // 写入进程0的栈信息（切栈）
     asm volatile(
         "mov %0, %%esp\n"                               // 恢复 esp
@@ -129,7 +133,7 @@ void idle(){
     // 开中断，这样切进程就能保留当前中断状态方便恢复eflags
     start_interrupt();
     while (true) {
-        schedule(); 
+        schedule();
         asm volatile("hlt\n");
     }
 }
@@ -137,7 +141,7 @@ void idle(){
 // 寻找 task_list 空闲
 
 // 初始化进程pcb（包括tss）
-pid_t task_create(void (*task_ptr)(void),
+pid_t task_create(void (*eip_ptr)(void),
                   const char* name,
                   u32 priority,
                   u32 uid) {
@@ -151,7 +155,7 @@ pid_t task_create(void (*task_ptr)(void),
     assert(sizeof(name) <= 16);
     strcpy(task->name, name);
 
-    u32 stack = (u32)task + PAGE_SIZE;
+    u32 stack = (u32)task + PAGE_SIZE - 1;
     task->stack = (u32*)stack;
     task->jiffies = 0;
     task->ticks = priority;
@@ -160,7 +164,7 @@ pid_t task_create(void (*task_ptr)(void),
     task->brk = 0;
     task->magic = LIGHTOS_MAGIC;
 
-    task->tss.eip = (u32)task_ptr;
+    task->tss.eip = (u32)eip_ptr;
     task->tss.ebp = stack;
     task->tss.esp = stack;
 
@@ -177,12 +181,13 @@ void task_setup(void) {
     pid = task_create(idle, "idle", 1, KERNEL_RING0);
     task_list[pid]->pde = KERNEL_PAGE_DIR_PADDR;
     pid = task_create(init_kthread, "init", 5, KERNEL_RING0);
-    task_list[pid]->pde = KERNEL_PAGE_DIR_PADDR; // 暂时不应该切换页表，先让内核完成所有初始化
+    task_list[pid]->pde =
+        KERNEL_PAGE_DIR_PADDR;  // 暂时不应该切换页表，先让内核完成所有初始化
     // pid = task_create(task_reader1, "reader 1", 5, KERNEL_RING0);
     // pid = task_create(task_reader2, "reader 2", 5, KERNEL_RING0);
     // pid = task_create(task_writer, "writer", 5, KERNEL_RING0);
 
-    current = task_list[0]; // IDLE
+    current = task_list[0];  // IDLE
 }
 
 void task_init(void) {
@@ -233,6 +238,64 @@ void sys_sleep(u32 ms) {
     schedule();
 }
 
+u32 sys_fork() {
+    u32 pid;
+    task_t* task = get_current();
+    task_t* child;
+    assert(task->uid == USER_RING3);
+
+    pid = get_free_task();
+    child = task_list[pid];
+    
+    // 拷贝 PCB + 内核栈
+    memcpy(child, task, PAGE_SIZE);
+
+    child->pid = pid;
+    child->ppid = task->pid;
+    child->tss.eax = pid;
+    child->ticks = child->priority; // 重置时间片
+    child->state = TASK_READY; // fork 进来是中断关闭状态
+    child->stack = (u32*)((u32)child + PAGE_SIZE -1);
+
+    // 创建并拷贝 PD 和 PT
+    // copy_pte(task_list[pid]);
+    copy_pde(child);
+
+    // 拷贝vmap
+    child->vmap = (bitmap_t*)kmalloc(sizeof(bitmap_t));
+    memcpy(child->vmap, task->vmap, sizeof(bitmap_t));
+
+    // 拷贝vmap buff
+    child->vmap->bits = (void*)alloc_kpage(1);
+    memcpy(child->vmap->bits, task->vmap->bits, PAGE_SIZE);
+
+    // 不需要手动修改其他寄存器，中断上下文保存了寄存器状态，复制内核栈就可以自动恢复了
+
+    child->tss.eip = (u32)&&child_task;
+
+    task->tss.eax = pid;
+    child->tss.eax = 0;
+
+    //单独保存栈寄存器
+    asm volatile (
+        "mov %%esp, %0\n"        // 保存 esp
+        "mov %%ebp, %1\n"        // 保存 ebp
+        : "=m"(child->tss.esp), "=m"(child->tss.ebp)  // 输出约束
+        :                        // 无输入寄存器
+        : "memory"               // 汇编可能修改内存
+    );
+    // 迁移内核栈
+    child->tss.esp = (0xfff & child->tss.esp) | (0xfffff000 & (u32)child->stack);
+    child->tss.ebp = (0xfff & child->tss.ebp) | (0xfffff000 & (u32)child->stack);
+
+
+child_task:
+    // 返回值
+    task = get_current();
+    // asm volatile("mov %0, %%eax\n"::"r"(task->tss.eax):"memory");
+    return task->tss.eax;
+}
+
 // 非系统调用，但与sleep对应
 void task_wakeup(void) {
     assert(!get_interrupt_state());  // 确保是clock进入的关中断状态
@@ -253,11 +316,10 @@ void task_wakeup(void) {
     }
 }
 
-void task_block(task_t* task, list_t* waiting_list, task_state_t task_state){
-    
-    if (waiting_list == NULL){
+void task_block(task_t* task, list_t* waiting_list, task_state_t task_state) {
+    if (waiting_list == NULL) {
         task->state = task_state;
-        if (current == task){
+        if (current == task) {
             schedule();
             return;
         }
@@ -268,30 +330,30 @@ void task_block(task_t* task, list_t* waiting_list, task_state_t task_state){
 
     list_pushback(waiting_list, &task->node);
     task->state = task_state;
-    if (current == task){
+    if (current == task) {
         schedule();
     }
 
     set_interrupt_state(intr);
 }
 
-void task_unblock(list_t* waiting_list){
+void task_unblock(list_t* waiting_list) {
     // 中断处理同上
     task_t* task;
     list_node_t* pnode;
     bool intr = interrupt_disable();
-    
-    if (!list_empty(waiting_list)){
+
+    if (!list_empty(waiting_list)) {
         pnode = list_pop(waiting_list);
         task = element_entry(task_t, node, pnode);
         task->state = TASK_READY;
-        schedule(); // 如果不主动让出，很可能循环获取资源导致阻塞的进程饿死
+        schedule();  // 如果不主动让出，很可能循环获取资源导致阻塞的进程饿死
     }
 
     set_interrupt_state(intr);
 }
 
-void task_intr_unblock_no_waiting_list(task_t* task){
+void task_intr_unblock_no_waiting_list(task_t* task) {
     // 中断中不可yield，不可主动让出执行流
     task->state = TASK_READY;
 }

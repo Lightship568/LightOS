@@ -71,33 +71,16 @@ void move_to_user_mode(void){
 extern int printf(const char *fmt, ...);
 
 void init_uthread(void){
-
-    char stack[PAGE_SIZE];
-    stack[0] = 1;
-
-    char* ptr = (char*)0x101000; //1M测试
-    brk(ptr);
-
-    ptr -= 0x1000;
-    printf("write 0x%p\n", ptr);
-    ptr[0] = 0xff;
-
-    ptr = (char*)0x201000;
-    brk(ptr);
-
-    ptr -= 0x1000;
-    printf("write 0x%p\n", ptr);
-    ptr[0] = 0xff;
-
-    printf("pid: %d\n", getpid());
-    printf("ppid: %d\n", getppid());
-
-    // 访问未映射的50M，正常panic
-    // ptr = (char*)(1024*1024*50);
-    // ptr[0] = 0xff;
-    
+    int pid;
+    printf("ready to fork!!!!\n");
+    pid = fork();
+    if (pid){
+        printf("this is parent init process\n");
+    }else{
+        printf("this is child process\n");
+    }
     while (true){
-        printf("sleep...\n");
+        printf("pid %d, sleep...\n", pid);
         sleep(1000);
     }
 }

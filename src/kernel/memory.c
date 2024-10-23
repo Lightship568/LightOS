@@ -336,14 +336,50 @@ static _inline void flush_tlb(u32 vaddr){
 
 static page_entry_t* get_pde(){
     //需要从 current 的 pde 中取虚拟地址
-    return (page_entry_t*)(current->pde + KERNEL_VADDR_OFFSET);
+    return (page_entry_t*)(get_current()->pde + KERNEL_VADDR_OFFSET);
 }
 
 void copy_pde(task_t* target_task){
     page_entry_t* pde = (page_entry_t*)alloc_kpage(1);
     // 拷贝页表
-    memcpy((void*)pde, (void*)(current->pde + KERNEL_VADDR_OFFSET), PAGE_SIZE);
+    memcpy((void*)pde, (void*)(get_current()->pde + KERNEL_VADDR_OFFSET), PAGE_SIZE);
     target_task->pde = (u32)pde - KERNEL_VADDR_OFFSET;
+}
+
+void copy_pte(task_t* target_task){
+    page_entry_t* current_pde_entry = get_pde();
+    page_entry_t* target_pde_entry;
+    page_entry_t* current_pte;
+    page_entry_t* target_pte;
+    u32 target_pte_paddr;
+
+    copy_pde(target_task);
+    target_pde_entry = (page_entry_t*)(target_task->pde + KERNEL_VADDR_OFFSET);
+
+    int i = 0;
+    // 用户页表拷贝
+    for (; i < PDE_IDX(KERNEL_VADDR_OFFSET); ++i){ //0-0x300
+        if (current_pde_entry->present){
+            target_pte_paddr = get_user_page();
+            // PDE需要更新到新PT
+            entry_init(target_pde_entry, IDX(target_pte_paddr));
+            // 拷贝PT内容
+            current_pte = (page_entry_t*)kmap(PAGE(current_pde_entry->index));
+            target_pte = (page_entry_t*)kmap(target_pte_paddr);
+            memcpy(target_pte, current_pte, PAGE_SIZE);
+            kunmap((u32)current_pte);
+            kunmap((u32)target_pte);
+        }
+        current_pde_entry += 1;
+    }
+
+    // 内核页表无需拷贝，直接共享PT
+    for (; i < (PAGE_SIZE/sizeof(page_entry_t)); ++i){ //0x300-0x400(768-1024)
+        if (current_pde_entry->present){
+            memcpy(target_pde_entry, current_pde_entry, sizeof(page_entry_t));
+        }
+        current_pde_entry += 1;
+    }
 }
 
 // kmap需要维护一个p-v的映射关系 kmap_poll，方便重入检查和unmap操作
@@ -403,7 +439,7 @@ u32 kmap(u32 paddr){
     kmap_pool[i].paddr = paddr;
     vaddr = KMAP_GET_VADDR(i);
 
-    entry_init(kmap_pte, IDX(paddr));
+    entry_init(&kmap_pte[i], IDX(paddr));
     flush_tlb(vaddr);
 
     DEBUGK("kmap paddr 0x%x at vaddr 0x%x\n", paddr, vaddr);
