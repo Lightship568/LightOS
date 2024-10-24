@@ -296,6 +296,36 @@ child_task:
     return task->tss.eax;
 }
 
+u32 sys_exit(u32 status){
+    // 需要释放的有：vmap, vmap->buf, PD, PTs, 以及 PTs 指向的所有 user_page
+    // 无需释放：task_list[n], task_t与内核栈所在页。这是因为延迟回收策略，便于父进程 waitpid
+    task_t* task = get_current();
+    // 主动调用exit()的情况，应该确认程序没有阻塞
+    assert(task->state == TASK_RUNNING);
+    assert(task->pid != 0 && task->pid != 1);
+    
+    task->state = TASK_DEAD;
+    task->status = status;
+
+    // 释放所有user_page, PTs, PD
+    free_pte(task);
+
+    // 释放vmap->buf
+    free_kpage((u32)task->vmap->bits, 1);
+    // 释放vmap
+    kfree(task->vmap);
+
+    // 将子进程的父进程托管给爷进程
+    for (size_t i = 0; i < NR_TASKS; ++i){
+        if(task_list[i] && task_list[i]->ppid == task->pid){
+            task_list[i]->ppid = task->ppid;
+        }
+    }
+
+    DEBUGK("Process %d exit with status %d\n", task->pid, task->status);
+    schedule();
+}
+
 // 非系统调用，但与sleep对应
 void task_wakeup(void) {
     assert(!get_interrupt_state());  // 确保是clock进入的关中断状态
@@ -355,5 +385,9 @@ void task_unblock(list_t* waiting_list) {
 
 void task_intr_unblock_no_waiting_list(task_t* task) {
     // 中断中不可yield，不可主动让出执行流
+    if (task->node.next != NULL){
+        assert(task->node.prev != NULL);
+        list_remove(&task->node);
+    }
     task->state = TASK_READY;
 }

@@ -50,8 +50,16 @@ void switch_to(int n) {
         : "memory"               // 汇编可能修改内存
     );
 
+    // 切换程序状态
+    if (current->state == TASK_RUNNING){ // 运行状态，非阻塞等其他状态
+        current->state = TASK_READY;
+    }
     // 切换current
     current = task_list[n];
+    
+    assert(current->state == TASK_READY); //能够被调度的一定是 READY 的任务
+    current->state = TASK_RUNNING;
+    
     // 切换cr3
     set_cr3(current->pde);
 

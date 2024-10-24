@@ -49,6 +49,10 @@ void copy_pde(task_t* target_task);
 // 同时增加 >=1M 的 mmap 引用
 void copy_pte(task_t* target_task);
 
+// 对应 copy_pte，在程序exit时调用
+// 释放所有user_page, PTs, PD, 解引用内核共享mem_map（归零自动释放）
+void free_pte(task_t* target_task);
+
 // 主要是通过分析 bios 内存检测获取的内存信息计算页数据，参数来自 head.s 的 push
 void memory_init(u32 magic, u32 addr);
 

@@ -78,6 +78,7 @@ void init_uthread(void){
         printf("this is parent init process\n");
     }else{
         printf("this is child process\n");
+        exit(0);
     }
     pid = getpid();
     while (true){

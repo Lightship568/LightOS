@@ -35,5 +35,6 @@ void syscall_init(void){
     syscall_table[SYS_NR_GETPID]    = sys_getpid;
     syscall_table[SYS_NR_GETPPID]   = sys_getppid;
     syscall_table[SYS_NR_FORK]      = sys_fork;
+    syscall_table[SYS_NR_EXIT]      = sys_exit;
     DEBUGK("Syscall initialized\n");
 }

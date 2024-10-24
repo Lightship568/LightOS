@@ -230,7 +230,7 @@ void set_cr3(u32 pde) {
 }
 
 // 从bit_map中分配 count 个连续的页，并设置mmap
-static u32 _alloc_page(bitmap_t* map, u32 count) {
+static u32 _alloc_kpage(bitmap_t* map, u32 count) {
     assert(count > 0);
 
     int32 index = bitmap_scan(map, count);
@@ -241,9 +241,7 @@ static u32 _alloc_page(bitmap_t* map, u32 count) {
     index = index - map->offset + IDX(MEMORY_BASE); // 从0开始的物理地址页的IDX
     // 设置mmap
     for (int i = 0; i < count; ++i){
-        if (mem_map[index]){
-            assert(!mem_map[index]);
-        }
+        assert(!mem_map[index]);
         mem_map[index] = 1;
         index++;
         free_pages--;
@@ -252,33 +250,32 @@ static u32 _alloc_page(bitmap_t* map, u32 count) {
     return vaddr;
 }
 
-// 与 _alloc_page 相对，重置相应的页
-static void _reset_page(bitmap_t* map, u32 vaddr, u32 count) {
+// 与 _alloc_kpage 相对，重置相应的页
+static void _reset_kpage(bitmap_t* map, u32 vaddr, u32 count) {
     ASSERT_PAGE(vaddr);
     assert(count > 0);
     u32 index = vaddr >> 12;
-
-    for (size_t i = 0; i < count; i++) {
-        assert(bitmap_test(map, index + i));
-        bitmap_set(map, index + i, 0);
-    }
+    u32 paddr_index;
 
     // 设置mmap
-    index = index - map->offset + IDX(MEMORY_BASE);
+    paddr_index = index - map->offset + IDX(MEMORY_BASE);
     for (int i = 0; i < count; ++i){
-        assert(mem_map[index]);
-        mem_map[index]--;
-        if (mem_map[index] == 0){
+        assert(mem_map[paddr_index]);
+        mem_map[paddr_index]--;
+        if (mem_map[paddr_index] == 0){
             free_pages++;
+            // 内核vmap，只有在物理内存释放后才能重置vmap
+            assert(bitmap_test(map, index + i));
+            bitmap_set(map, index + i, 0);
         }
-        index++;
+        paddr_index++;
     }
 }
 
 // 分配 count 个连续的内核页
 u32 alloc_kpage(u32 count) {
     assert(count > 0);
-    u32 vaddr = _alloc_page(&kernel_map, count);
+    u32 vaddr = _alloc_kpage(&kernel_map, count);
     DEBUGK("Alloc kernel pages 0x%p count %d\n", vaddr, count);
     return vaddr;
 }
@@ -287,7 +284,7 @@ u32 alloc_kpage(u32 count) {
 void free_kpage(u32 vaddr, u32 count) {
     ASSERT_PAGE(vaddr);
     assert(count > 0);
-    _reset_page(&kernel_map, vaddr, count);
+    _reset_kpage(&kernel_map, vaddr, count);
     DEBUGK("Free kernel pages 0x%p count %d\n", vaddr, count);
 }
 
@@ -302,7 +299,7 @@ static u32 get_user_page() {
             DEBUGK("Get free page 0x%p\n", paddr);
             return paddr;
         }
-    }
+    }    
     panic("get_user_page: Out of Memory!\nTotal memory: 0x%x bytes\n", total_pages * PAGE_SIZE);
 }
 
@@ -389,17 +386,63 @@ void copy_pte(task_t* target_task){
     // 修改了只读，需要刷新快表，否则父进程仍可以根据tlb从而写入共享页
     set_cr3(get_current()->pde); 
 
+    // 因为内核完全是共享的，不应该直接加解引用这么玩
+
     // 内核页已经由copy_pde拷贝设置共享
-    // 只需要设置 >1M 的 mem_map 引用情况
-    for (; i < (PAGE_SIZE/sizeof(page_entry_t)); ++i, current_pde_entry++){
-        if (!current_pde_entry->present) continue;
-        temp_pte_entry = (page_entry_t*)(current_pde_entry->index + KERNEL_VADDR_OFFSET);
-        for (size_t j = 0; j < (PAGE_SIZE/sizeof(page_entry_t)); ++j, temp_pte_entry++){
-            if (!temp_pte_entry->present) continue;
-            assert(mem_map[temp_pte_entry->index]);
-            mem_map[temp_pte_entry->index]++;
+    // 只需要设置 >=1M 的 mem_map 引用情况
+    // for (; i < PDE_IDX(KERNEL_VADDR_OFFSET) + KERNEL_PAGE_TABLE_COUNT; ++i, current_pde_entry++){
+    //     if (!current_pde_entry->present) continue;
+    //     temp_pte_entry = (page_entry_t*)(PAGE(current_pde_entry->index) + KERNEL_VADDR_OFFSET);
+    //     for (size_t j = 0; j < (PAGE_SIZE/sizeof(page_entry_t)); ++j, temp_pte_entry++){
+    //         if (i == 0x300 && j < (0x100 + mem_map_pages)) continue; //4k*256==1M，需要跳过 <1M 与 mem_map 范围
+    //         if (mem_map[temp_pte_entry->index] == 0) continue; // 内核页表已经全部映射，只需要对已有 mem_map 增引用即可
+    //         mem_map[temp_pte_entry->index]++;
+    //     }
+    // }
+}
+
+void free_pte(task_t* target_task){
+    page_entry_t* pde_entry;
+    page_entry_t* pte_entry;
+    u32 pte_paddr;
+    pde_entry = (page_entry_t*)(target_task->pde + KERNEL_VADDR_OFFSET);
+
+    size_t i = 0;
+    // 用户页表释放（phy > 8M）
+    for (; i < PDE_IDX(KERNEL_VADDR_OFFSET); ++i, pde_entry++){ //0-0x300
+        if (!pde_entry->present) continue;
+        pte_paddr = PAGE(pde_entry->index);
+        pte_entry = (page_entry_t*)kmap(pte_paddr);
+        for (size_t j = 0; j < (PAGE_SIZE/sizeof(page_entry_t)); ++j, pte_entry++){
+            if (!pte_entry->present) continue;
+            // 释放用户内存
+            put_user_page(PAGE(pte_entry->index));
+            // 没清理进程 vmap，反正exit的后续都要释放掉
         }
+        kunmap((u32)pte_entry);
+        // 释放 PT 所在页
+        put_user_page(pte_paddr);
     }
+
+    // 因为内核完全是共享的，不应该直接加解引用这么玩
+    // 比如下面这个pd或者vmap之类的就是创建新进程kalloc出来的，在这里释放的话就会与主动释放发生冲突，逻辑也不好
+    // 没法判断是否是本进程的页还是其他的进程的页，所以干脆不修改引用了。
+
+
+    // 内核页减少 mem_map 引用计数
+    // for (; i < PDE_IDX(KERNEL_VADDR_OFFSET) + KERNEL_PAGE_TABLE_COUNT; ++i, pde_entry++){
+    //     if (!pde_entry->present) continue;
+    //     pte_entry = (page_entry_t*)(PAGE(pde_entry->index) + KERNEL_VADDR_OFFSET);
+    //     for (size_t j = 0; j < (PAGE_SIZE/sizeof(page_entry_t)); ++j, pte_entry++){
+    //         if (i == 0x300 && j < (0x100 + mem_map_pages)) continue; //4k*256==1M，需要跳过 <1M 与 mem_map 范围
+    //         if (mem_map[pte_entry->index] == 0) continue; // 内核页表已经全部映射，只需要对已有 mem_map 解引用即可
+    //         free_kpage(PAGE(pte_entry->index) + KERNEL_VADDR_OFFSET, 1); // 减少引用计数，归零则释放bitmap
+    //     }
+    // }
+
+    // 最后释放 PD
+    pde_entry = (page_entry_t*)(target_task->pde + KERNEL_VADDR_OFFSET);
+    free_kpage((u32)pde_entry, 1);
 }
 
 // kmap需要维护一个p-v的映射关系 kmap_poll，方便重入检查和unmap操作

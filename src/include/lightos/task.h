@@ -65,7 +65,7 @@ typedef enum task_state_t {
     TASK_BLOCKED,   // 阻塞
     TASK_SLEEPING,  // 阻塞-睡眠
     TASK_WARTING,   // 阻塞-等待
-    TASK_DIED,      // 死亡
+    TASK_DEAD,      // 死亡
 } task_state_t;
 
 // PCB
@@ -84,6 +84,7 @@ typedef struct task_struct{
     struct bitmap_t *vmap;          // 进程虚拟内存位图
     struct tss_t tss;               // TSS
     u32 brk;                        // 进程堆内存最高地址
+    int32 status;                     // 进程特殊状态
     u32 magic;                      // 检测内核栈溢出（溢出到 PCB 就寄了）
 } task_t;
 
@@ -137,6 +138,8 @@ u32 sys_getppid();
 
 // 系统调用 fork
 u32 sys_fork();
+// 系统调用 exit
+u32 sys_exit(u32 status);
 
 // 非系统调用，但与sleep对应，被clock调用
 void task_wakeup(void);

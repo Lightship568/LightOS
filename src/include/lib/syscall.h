@@ -84,5 +84,6 @@ int32 brk(void* addr);
 pid_t getpid();
 pid_t getppid();
 pid_t fork();
+void exit(u32 status);
 
 #endif

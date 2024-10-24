@@ -72,3 +72,7 @@ pid_t getppid(){
 pid_t fork(){
     return _syscall0(SYS_NR_FORK);
 }
+
+void exit(u32 status){
+    _syscall1(SYS_NR_EXIT, (u32)status);
+}
