@@ -58,7 +58,7 @@ void schedule(void) {
     pid_t target = 0;
     for (int i = 0; i < NR_TASKS; ++i, ++n) {
         n %= NR_TASKS;
-        if (n != 0 && task_list[n] != NULL && task_list[n]->ticks &&
+        if (n != 0 && task_list[n] && task_list[n]->ticks &&
             task_list[n]->state == TASK_READY) {
             target = n;
             break;
@@ -211,6 +211,39 @@ u32 sys_getppid() {
     return get_current()->ppid;
 }
 
+pid_t sys_waitpid(pid_t pid, int32* status, int32 options) {
+    task_t* task = get_current();
+    task_t* child = NULL;
+    bool has_child;
+    while(true){
+        has_child = false;
+        for(size_t i = 2; i < NR_TASKS; ++i){
+            if (task_list[i] && task_list[i]->ppid == task->pid){
+                has_child = true;
+                child = task_list[i];
+                break;
+            }
+        }
+        if (has_child){
+            if (child->state == TASK_DEAD){
+                break;
+            }else{
+                task->waitpid = pid;
+                task_block(task, NULL, TASK_WARTING);
+                continue;
+            }
+        }
+        // 未找到 child，直接返回-1
+        DEBUGK("[waitpid] pid %n isn't chiled process of pid %n\n", pid, task->pid);
+        return -1;
+    }
+    // 清空子进程 PCB，返回其 pid
+    *status = child->status;
+    task_list[child->pid] = NULL;
+    free_kpage((u32)child, 1);
+    return child->pid;
+}
+
 void sys_sleep(u32 ms) {
     assert(!get_interrupt_state());  // 确保是系统调用进来关中断的状态
     list_node_t* current_p = &current->node;
@@ -252,10 +285,11 @@ u32 sys_fork() {
 
     child->pid = pid;
     child->ppid = task->pid;
-    child->tss.eax = pid;
     child->ticks = child->priority; // 重置时间片
     child->state = TASK_READY; // fork 进来是中断关闭状态
     child->stack = (u32*)((u32)child + PAGE_SIZE -1);
+    child->tss.eax = pid;
+    child->tss.esp0 = (u32)child->stack;
 
     // 创建并拷贝 PD 和 PTs
     // copy_pde(child);
@@ -315,14 +349,23 @@ u32 sys_exit(u32 status){
     // 释放vmap
     kfree(task->vmap);
 
-    // 将子进程的父进程托管给爷进程
     for (size_t i = 0; i < NR_TASKS; ++i){
-        if(task_list[i] && task_list[i]->ppid == task->pid){
+        if(!task_list[i]) continue;
+        
+        if (task_list[i]->ppid == task->pid){
+            // 将子进程托管给爷进程
             task_list[i]->ppid = task->ppid;
+        } else if (task_list[i]->waitpid == task->pid){
+            // 唤醒 TASK_WAIT 的父进程
+            assert(task_list[i]->state == TASK_WARTING);
+            task_intr_unblock_no_waiting_list(task_list[i]);
+            task_list[i]->waitpid = 0;
         }
+        // todo 若父进程是init，则清理僵尸进程
+        
     }
 
-    DEBUGK("Process %d exit with status %d\n", task->pid, task->status);
+    DEBUGK("Process %d (0x%x) exit with status %d\n", task->pid, task, task->status);
     schedule();
 }
 

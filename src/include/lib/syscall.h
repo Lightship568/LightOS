@@ -85,5 +85,6 @@ pid_t getpid();
 pid_t getppid();
 pid_t fork();
 void exit(u32 status);
+pid_t waitpid(pid_t pid, int32* status, int32 options);
 
 #endif

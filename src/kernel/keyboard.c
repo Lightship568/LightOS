@@ -360,7 +360,7 @@ u32 keyboard_read(char* buf, u32 count){
     while (nr < count){
         while (kfifo_empty(&kb_fifo)){
             fg_task = get_current();
-            task_block(fg_task, NULL, TASK_WARTING); // 阻塞等待输入
+            task_block(fg_task, NULL, TASK_BLOCKED); // 阻塞等待输入
         }
         buf[nr++] = kfifo_get(&kb_fifo); // 加入到目标缓冲区
     }
