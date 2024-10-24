@@ -257,9 +257,9 @@ u32 sys_fork() {
     child->state = TASK_READY; // fork 进来是中断关闭状态
     child->stack = (u32*)((u32)child + PAGE_SIZE -1);
 
-    // 创建并拷贝 PD 和 PT
-    // copy_pte(task_list[pid]);
-    copy_pde(child);
+    // 创建并拷贝 PD 和 PTs
+    // copy_pde(child);
+    copy_pte(child);
 
     // 拷贝vmap
     child->vmap = (bitmap_t*)kmalloc(sizeof(bitmap_t));

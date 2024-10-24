@@ -29,7 +29,7 @@ void move_to_user_mode(void){
     void* buf = (void*)alloc_kpage(1);      // todo free_kpage
     bitmap_init(task->vmap, buf, PAGE_SIZE, 0);
 
-    // 切换为独立页表（init自己拷贝自己）
+    // 切换为独立页表（init自己拷贝自己），此时无用户态页，本质就是内核地址共享
     copy_pde(task);
     set_cr3(task->pde);
 
@@ -79,6 +79,7 @@ void init_uthread(void){
     }else{
         printf("this is child process\n");
     }
+    pid = getpid();
     while (true){
         printf("pid %d, sleep...\n", pid);
         sleep(1000);

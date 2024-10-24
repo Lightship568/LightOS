@@ -46,6 +46,7 @@ void set_cr3(u32 pde);
 // 拷贝 current 进程 pde 到 target_task->pde
 void copy_pde(task_t* target_task);
 // 拷贝 current 进程 pd 和所有有效 pt 到 target_task（并设置pde）
+// 同时增加 >=1M 的 mmap 引用
 void copy_pte(task_t* target_task);
 
 // 主要是通过分析 bios 内存检测获取的内存信息计算页数据，参数来自 head.s 的 push
@@ -77,6 +78,9 @@ void free_kpage(u32 vaddr, u32 count);
 void link_user_page(u32 vaddr);
 // 取消用户态 vaddr(页对齐) 的物理内存映射（present=false）
 void unlink_user_page(u32 vaddr);
+
+void page_fault(int vector, u32 edi, u32 esi, u32 ebp, u32 esp, u32 ebx, u32 edx, u32 ecx,
+    u32 eax, u32 gs, u32 fs, u32 es, u32 ds, u32 vector0, u32 error, u32 eip, u32 cs, u32 eflags, u32 esp3, u32 ss3);
 
 // 系统调用 brk
 int32 sys_brk(void* addr);

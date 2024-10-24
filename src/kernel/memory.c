@@ -241,7 +241,9 @@ static u32 _alloc_page(bitmap_t* map, u32 count) {
     index = index - map->offset + IDX(MEMORY_BASE); // 从0开始的物理地址页的IDX
     // 设置mmap
     for (int i = 0; i < count; ++i){
-        assert(!mem_map[index]);
+        if (mem_map[index]){
+            assert(!mem_map[index]);
+        }
         mem_map[index] = 1;
         index++;
         free_pages--;
@@ -352,33 +354,51 @@ void copy_pte(task_t* target_task){
     page_entry_t* current_pte;
     page_entry_t* target_pte;
     u32 target_pte_paddr;
+    page_entry_t* temp_pte_entry; // 遍历pte使用
 
     copy_pde(target_task);
     target_pde_entry = (page_entry_t*)(target_task->pde + KERNEL_VADDR_OFFSET);
 
-    int i = 0;
-    // 用户页表拷贝
-    for (; i < PDE_IDX(KERNEL_VADDR_OFFSET); ++i){ //0-0x300
-        if (current_pde_entry->present){
-            target_pte_paddr = get_user_page();
-            // PDE需要更新到新PT
-            entry_init(target_pde_entry, IDX(target_pte_paddr));
-            // 拷贝PT内容
-            current_pte = (page_entry_t*)kmap(PAGE(current_pde_entry->index));
-            target_pte = (page_entry_t*)kmap(target_pte_paddr);
-            memcpy(target_pte, current_pte, PAGE_SIZE);
-            kunmap((u32)current_pte);
-            kunmap((u32)target_pte);
+    size_t i = 0;
+    // 用户页表PT拷贝（phy > 8M）
+    for (; i < PDE_IDX(KERNEL_VADDR_OFFSET); ++i, current_pde_entry++, target_pde_entry++){ //0-0x300
+        if (!current_pde_entry->present) continue;
+        target_pte_paddr = get_user_page();
+        // PDE需要更新到新PT
+        entry_init(target_pde_entry, IDX(target_pte_paddr));
+        // >8M kmap 进内核
+        current_pte = (page_entry_t*)kmap(PAGE(current_pde_entry->index));
+        target_pte = (page_entry_t*)kmap(target_pte_paddr);
+        // 设置 CoW
+        temp_pte_entry = current_pte;
+        for (size_t j = 0; j < (PAGE_SIZE/sizeof(page_entry_t)); ++j, temp_pte_entry++){
+            if (!temp_pte_entry->present) continue;
+            // 设置不可写
+            temp_pte_entry->write = false;
+            // 增加引用计数
+            mem_map[temp_pte_entry->index]++;
+            assert(mem_map[temp_pte_entry->index] < 255);
         }
-        current_pde_entry += 1;
+        // 拷贝PT内容（包括新设置的write位）
+        memcpy(target_pte, current_pte, PAGE_SIZE);
+        // 取消两个pte的映射
+        kunmap((u32)current_pte);
+        kunmap((u32)target_pte);
     }
 
-    // 内核页表无需拷贝，直接共享PT
-    for (; i < (PAGE_SIZE/sizeof(page_entry_t)); ++i){ //0x300-0x400(768-1024)
-        if (current_pde_entry->present){
-            memcpy(target_pde_entry, current_pde_entry, sizeof(page_entry_t));
+    // 修改了只读，需要刷新快表，否则父进程仍可以根据tlb从而写入共享页
+    set_cr3(get_current()->pde); 
+
+    // 内核页已经由copy_pde拷贝设置共享
+    // 只需要设置 >1M 的 mem_map 引用情况
+    for (; i < (PAGE_SIZE/sizeof(page_entry_t)); ++i, current_pde_entry++){
+        if (!current_pde_entry->present) continue;
+        temp_pte_entry = (page_entry_t*)(current_pde_entry->index + KERNEL_VADDR_OFFSET);
+        for (size_t j = 0; j < (PAGE_SIZE/sizeof(page_entry_t)); ++j, temp_pte_entry++){
+            if (!temp_pte_entry->present) continue;
+            assert(mem_map[temp_pte_entry->index]);
+            mem_map[temp_pte_entry->index]++;
         }
-        current_pde_entry += 1;
     }
 }
 
@@ -548,6 +568,89 @@ void unlink_user_page(u32 vaddr){
     kunmap(GET_PAGE(entry)); //清理get_pte的kmap
 
     DEBUGK("Unlink user page for 0x%x at paddr 0x%x\n", vaddr, PAGE(entry->index));
+}
+
+typedef struct page_error_code_t {
+    u8 present : 1;
+    u8 write : 1;
+    u8 user : 1;
+    u8 reserved0 : 1;
+    u8 fetch : 1;
+    u8 protection : 1;
+    u8 shadow : 1;
+    u16 reserved1 : 8;
+    u8 sgx : 1;
+    u16 reserved2;
+} _packed page_error_code_t;
+
+void page_fault(int vector, u32 edi, u32 esi, u32 ebp, u32 esp, u32 ebx, u32 edx, u32 ecx,
+    u32 eax, u32 gs, u32 fs, u32 es, u32 ds, u32 vector0, u32 error, u32 eip, u32 cs, u32 eflags, u32 esp3, u32 ss3) {
+
+    // 读取 CR2 寄存器，获取导致缺页的虚拟地址
+    u32 faulting_address;
+    task_t* task;
+    asm volatile("movl %%cr2, %0\n" : "=r"(faulting_address));
+    DEBUGK("PF at vaddress 0x%x\n", faulting_address);
+
+    task = get_current();
+    // 一定是用户态才能进入 PF，如果是内核PF，理应panic
+    assert(task->uid == USER_RING3);
+    assert(faulting_address <= USER_STACK_TOP);
+
+    page_error_code_t* code = (page_error_code_t*)&error;
+
+    if (code->present) {
+        // 页存在但有访问权限问题（例如，写入只读页）
+        assert(code->write);
+
+        // 发生error，应该能确认页表一定存在，所以可以使用get_pte获取已有pte entry虚拟地址
+        page_entry_t* pte_entry = get_pte(faulting_address);
+        assert(pte_entry->present);
+        assert(pte_entry->index >= IDX(MEMORY_BASE));
+        assert(mem_map[pte_entry->index]);
+        /**
+         * 当然，这样设计对于之后的多引用计数的页来说是不合理的，
+         * 但我目前想不到当前如何标记是CoW还是正常程序触发了页保护（不会在pcb加字段吧？）
+         * 所以先这样，之后遇到共享页比如 IPC 或者动态链接库之后再说。
+         */
+        if (mem_map[pte_entry->index] == 1){
+            // fork的另一个进程已经PF并复制过了
+            pte_entry->write = true;
+            DEBUGK("CoW: Already copy at 0x%x\n", faulting_address);
+        } else {
+            assert(mem_map[pte_entry->index]==2);
+            mem_map[pte_entry->index]--;
+            // 为进程拷贝一个新的物理页
+            u32 paddr_page = get_user_page();
+            u32 page_new_vaddr = kmap(paddr_page);
+            u32 page_old_vaddr = kmap(PAGE(pte_entry->index));
+            memcpy((void*)page_new_vaddr, (void*)page_old_vaddr, PAGE_SIZE); // 复制内存页
+            entry_init(pte_entry, IDX(paddr_page));
+            flush_tlb(faulting_address);
+            DEBUGK("CoW: Copy on Write at 0x%x\n", faulting_address);
+        }
+
+        kunmap(GET_PAGE(pte_entry)); // 清理 get_pte 的 kmap
+
+        // 处理权限问题，或杀死进程等操作
+        // printk("PF error: Access deined\n");
+    } else {
+        
+        if (esp3 <= USER_STACK_BOTTOM){ // 用户爆栈
+            // todo SIGSEGV 终止进程
+            panic("user stack overflow at esp: 0x%x!\n", esp3);
+        } else if (faulting_address > USER_STACK_BOTTOM){
+            // pass
+        } else if (faulting_address > task->brk){ //用户访问未映射高地址
+            panic("user access unmapped memory at 0x%x!\n", faulting_address);
+        } else {
+            // pass
+        }
+        link_user_page(faulting_address);
+    }
+
+    return;
+
 }
 
 /******************************************************************************************************************
