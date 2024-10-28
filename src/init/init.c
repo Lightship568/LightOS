@@ -88,14 +88,13 @@ void init_uthread(void){
             }else{
                 printf("[parent] wait pid %d status %d\n", child_pid, status);
             }
-            printf("----------------------\n");
-            sleep(5000);
-            printf("----------------------\n");
         } else { // pid = 0
             pid = getpid();
             printf("[child] this is child process\n");
             printf("[child] pid %d, sleep 1s\n", pid);
-            sleep(5000);
+            printf("time: %d\n", time());
+            sleep(1000);
+            printf("time: %d\n", time());
             printf("[child] pid %d, exit(0)\n", pid);
             exit(0);
         }

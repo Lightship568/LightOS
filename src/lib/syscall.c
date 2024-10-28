@@ -80,3 +80,7 @@ void exit(u32 status){
 pid_t waitpid(pid_t pid, int32* status, int32 options){
     return _syscall3(SYS_NR_WAITPID, (u32)pid, (u32)status, (u32)options);
 }
+
+time_t time(){
+    return _syscall0(SYS_NR_TIME);
+}
