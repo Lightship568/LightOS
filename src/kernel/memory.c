@@ -715,14 +715,15 @@ int32 sys_brk(void* addr){
         return -1;
     }
 
-    if (task->brk > brk){
-        for (; brk < task->brk; brk += PAGE_SIZE){
-            unlink_user_page(brk);
+    if (task->brk > brk){ // 回收brk
+        for (u32 page = brk; page < task->brk; page += PAGE_SIZE){
+            unlink_user_page(page);
         }
-    } else if ((brk - task->brk) > PAGE(free_pages)){
+    } else if ((brk - task->brk) > PAGE(free_pages)){ // 内存不够
         DEBUGK("brk out of memory\n");
         return -1;
     }
+    // else 增加brk
 
     task->brk = brk;
     return 0;
