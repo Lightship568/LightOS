@@ -7,6 +7,8 @@
  * 软件实现上下文切换功能
  */
 
+extern u32 volatile jiffies;  // clock.c 时间片数
+
 void switch_to(int n) {
     assert(n >= 0 && n < NR_TASKS && task_list[n] != NULL);
 
@@ -65,6 +67,10 @@ void switch_to(int n) {
 
     // 切换tdr指向的tss.esp0，使得ring3中断可以进入正确的内核栈
     tss.esp0 = current->tss.esp0;
+
+    // 更新时钟（存在不经过时钟中断而连续通过阻塞让出时间片，此时进程的jiffies需要更新）
+    current->jiffies = jiffies;
+
 
     // 加载状态
     asm volatile (

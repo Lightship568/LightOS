@@ -95,7 +95,7 @@ void init_uthread(void){
             pid = getpid();
             printf("[child] this is child process\n");
             printf("[child] pid %d, sleep 1s\n", pid);
-            sleep(10000);
+            sleep(5000);
             printf("[child] pid %d, exit(0)\n", pid);
             exit(0);
         }

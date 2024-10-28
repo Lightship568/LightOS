@@ -244,33 +244,6 @@ pid_t sys_waitpid(pid_t pid, int32* status, int32 options) {
     return child->pid;
 }
 
-void sys_sleep(u32 ms) {
-    assert(!get_interrupt_state());  // 确保是系统调用进来关中断的状态
-    list_node_t* current_p = &current->node;
-    task_t* target_task;
-    list_node_t* anchor = &sleep_list.tail;
-
-    // 没有被阻塞，才可被休眠
-    assert(current->node.next == NULL && current->node.prev == NULL);
-
-    current->ticks = ms / jiffy;
-    current->jiffies = current->jiffies + current->ticks;
-
-    // 基于ticks的插入排序
-    for (list_node_t* p = sleep_list.head.next; p != &sleep_list.tail;
-         p = p->next) {
-        target_task = element_entry(task_t, node, p);
-        if (current->jiffies < target_task->jiffies) {
-            anchor = p;
-            break;
-        }
-    }
-    list_insert_before(anchor, current_p);
-
-    current->state = TASK_SLEEPING;
-    schedule();
-}
-
 u32 sys_fork() {
     u32 pid;
     task_t* task = get_current();
@@ -369,7 +342,34 @@ u32 sys_exit(u32 status){
     schedule();
 }
 
-// 非系统调用，但与sleep对应
+void sys_sleep(u32 ms) {
+    assert(!get_interrupt_state());  // 确保是系统调用进来关中断的状态
+    list_node_t* current_p = &current->node;
+    task_t* target_task;
+    list_node_t* anchor = &sleep_list.tail;
+
+    // 没有被阻塞，才可被休眠
+    assert(current->node.next == NULL && current->node.prev == NULL);
+
+    current->ticks = ms / jiffy;
+    current->jiffies = current->jiffies + current->ticks;
+
+    // 基于ticks的插入排序
+    for (list_node_t* p = sleep_list.head.next; p != &sleep_list.tail;
+         p = p->next) {
+        target_task = element_entry(task_t, node, p);
+        if (current->jiffies < target_task->jiffies) {
+            anchor = p;
+            break;
+        }
+    }
+    list_insert_before(anchor, current_p);
+
+    current->state = TASK_SLEEPING;
+    schedule();
+}
+
+// 非系统调用，但与sleep对应，被 clock.c 时钟中断调用
 void task_wakeup(void) {
     assert(!get_interrupt_state());  // 确保是clock进入的关中断状态
     task_t* target_task;
