@@ -1934,3 +1934,50 @@ typedef struct kmap_mapping{
 
 但是boot.asm中可是明确指定了拷贝的lba从1-4的四个扇区，这个不可能出错。为何boot中正常使用的lba到了c中就存在了一个偏移呢？需要找出为什么当前传入的lba有一个-1的偏移。
 
+测试了qemu, qemu+grub, vmware+grub(iso)，尝试读第二个2扇区（LBA==1），最终结果如下：
+
+* qemu 读取了 LBA==0 的扇区。
+* qemu+grub 报错 abort
+* vmware由于IDE与iso分离，因此读取的是正常的全 0。
+
+尝试读取第一个扇区（LBA == 0）：
+
+* qemu 中两个都报错 abort
+* vmware 中报错 id not found
+
+根据id的提示，找到了问题，原来是`disk->selector = IDE_LBA_MASTER;  `TMD写成了-号，根本没赋值主盘 selector，太智障了浪费了俩小时。
+
+### qemu+grub的 CDROM 与 IDE 冲突问题
+
+这下qemu+vmware都正常了，但是qemu+grub还是abort？观察了一下与vmware的区别，发现vmware的IDE设备与iso是分割的，写入IDE并不会修改iso，并且不受重新编译影响。因此猜测是未指定IDE的原因。
+
+```makefile
+#正常qemu的img启动命令如下
+QEMU_DISK+= -drive file=$(BUILD)/LightOS.img,if=ide,index=0,media=disk,format=raw 	# 主硬盘
+# 但是grub启动指定的是iso
+QEMU_CDROM+= -drive file=$(BUILD)/kernel.iso,media=cdrom 
+```
+
+> **为什么vmware可以默认从cdrom中启动，而IDE保持于IDE0的主盘？**
+>
+> VMware 和 QEMU 在处理启动设备和 IDE 控制器的方式上确实存在一些不同之处：
+>
+> 1. **设备分配的默认行为**：
+>    - **VMware** 会自动将 **CD-ROM** 识别为启动设备，无需更改 IDE 总线的默认主盘（`IDE0` 的主盘），可以直接从 CD-ROM 启动，同时保留 IDE0 主盘用于硬盘。
+>    - **QEMU** 通常会将指定的 `index=0` 设备优先作为启动设备，如果加载了 ISO 文件，会默认将其设置在 IDE0 主通道上作为系统盘。这意味着，若 `index=0` 被占用，硬盘会被自动挤出此位置，造成冲突。
+> 2. **IDE 通道和启动优先级**：
+>    - VMware 的虚拟 BIOS 在启动顺序上更灵活，通常会自动识别并从 CD-ROM 启动（即使 CD-ROM 在 IDE1 上），而硬盘可以保留在 IDE0 上作为次启动设备。
+>    - QEMU 的默认设置相对简单，通常直接将 `index=0` 设备作为主要启动设备。这样在 QEMU 中配置硬盘和光驱时，必须手动指定位置以确保启动顺序。
+> 3. **BIOS 与引导逻辑差异**：
+>    - VMware 的 BIOS 配置会在系统设置中有专门的启动顺序选项，确保更灵活的引导设备配置，而 QEMU 的 BIOS 在引导顺序处理上更为直接，且通常假定 `index=0` 为主要启动位置。
+>
+> 在 QEMU 上，为了让系统从 ISO 启动，同时能使用 IDE 硬盘，必须手动调整设备的 IDE 通道，通常将硬盘放在 IDE1，避免与 ISO 冲突。
+
+因此，暂时不考虑qemu+grub启动的IDE问题，因为后续会实现硬盘发现功能。
+
+
+
+
+
+
+

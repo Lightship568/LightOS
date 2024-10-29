@@ -162,6 +162,8 @@ QEMU_DISK+= -drive file=$(BUILD)/LightOS.img,if=ide,index=0,media=disk,format=ra
 
 QEMU_CDROM:= -boot d
 QEMU_CDROM+= -drive file=$(BUILD)/kernel.iso,media=cdrom
+# 测试指定一个IDE主盘
+QEMU_CDROM+= -drive file=$(BUILD)/LightOS.img,if=ide,index=1,media=disk,format=raw 	# 主硬盘
 
 QEMU_DEBUG:=-s -S
 
@@ -184,7 +186,7 @@ qemug-grub: $(BUILD)/kernel.iso
 .PHONY: iso
 iso: $(BUILD)/kernel.iso
 
-$(BUILD)/LightOS.vmdk: $(BUILD)/LightOS.img
-	qemu-img convert -O vmdk $< $@
-.PHONY: vmdk
-vmdk: $(BUILD)/LightOS.vmdk
+# $(BUILD)/LightOS.vmdk: $(BUILD)/LightOS.img
+# 	qemu-img convert -O vmdk $< $@
+# .PHONY: vmdk
+# vmdk: $(BUILD)/LightOS.vmdk

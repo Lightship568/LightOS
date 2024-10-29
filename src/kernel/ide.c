@@ -15,8 +15,6 @@
 #define EIO 1
 #define ETIME 2
 
-#define LOGK(fmt, args...) DEBUGK(fmt, ##args)
-
 #define IDE_TIMEOUT 60000
 
 // IDE 寄存器基址，是 Port I/O 地址，不是 MMIO，不需要增加虚拟地址偏移
@@ -163,7 +161,7 @@ typedef struct ide_params_t {
 
 ide_ctrl_t controllers[IDE_CTRL_NR];
 
-// static int ide_reset_controller(ide_ctrl_t* ctrl);
+static int ide_reset_controller(ide_ctrl_t* ctrl);
 
 // 硬盘中断处理函数
 static void ide_handler(int vector) {
@@ -174,7 +172,7 @@ static void ide_handler(int vector) {
 
     // 读取常规状态寄存器，表示中断处理结束
     u8 state = inb(ctrl->iobase + IDE_STATUS);
-    LOGK("Harddisk interrupt vector %d state 0x%x\n", vector, state);
+    DEBUGK("Harddisk interrupt vector %d state 0x%x\n", vector, state);
     if (ctrl->waiter) {
         // 如果有进程阻塞，则取消阻塞
         task_intr_unblock_no_waiting_list(ctrl->waiter);
@@ -185,21 +183,21 @@ static void ide_handler(int vector) {
 static void ide_error(ide_ctrl_t* ctrl) {
     u8 error = inb(ctrl->iobase + IDE_ERR);
     if (error & IDE_ER_BBK)
-        LOGK("bad block\n");
+        DEBUGK("bad block\n");
     if (error & IDE_ER_UNC)
-        LOGK("uncorrectable data\n");
+        DEBUGK("uncorrectable data\n");
     if (error & IDE_ER_MC)
-        LOGK("media change\n");
+        DEBUGK("media change\n");
     if (error & IDE_ER_IDNF)
-        LOGK("id not found\n");
+        DEBUGK("id not found\n");
     if (error & IDE_ER_MCR)
-        LOGK("media change requested\n");
+        DEBUGK("media change requested\n");
     if (error & IDE_ER_ABRT)
-        LOGK("abort\n");
+        DEBUGK("abort\n");
     if (error & IDE_ER_TK0NF)
-        LOGK("track 0 not found\n");
+        DEBUGK("track 0 not found\n");
     if (error & IDE_ER_AMNF)
-        LOGK("address mark not found\n");
+        DEBUGK("address mark not found\n");
 }
 
 // 硬盘延迟
@@ -209,7 +207,7 @@ static void ide_delay() {
 
 static int32 ide_busy_wait(ide_ctrl_t* ctrl, u8 mask) { // 同步pio
     while (true) {
-        u8 state = inb(ctrl->iobase + IDE_ALT_STATUS);
+        u8 state = inb(ctrl->iobase + IDE_ALT_STATUS); // 这里读备用是因为，如果读了常规状态寄存器，则IDE中断不会触发
         if (state & IDE_SR_ERR) {  // 有错误
             ide_error(ctrl);
             panic("error\n");
@@ -284,6 +282,7 @@ static void ide_select_sector(ide_disk_t* disk, u32 lba, u8 count) {
 
     // LBA 最高四位 + 磁盘选择
     outb(disk->ctrl->iobase + IDE_HDDEVSEL, ((lba >> 24) & 0xf) | disk->selector);
+    
     disk->ctrl->active = disk;
 }
 
@@ -327,7 +326,7 @@ int ide_pio_read(ide_disk_t* disk, void* buf, u8 count, idx_t lba) {
 
     int ret = -EIO;
 
-    LOGK("read lba 0x%x\n", lba);
+    DEBUGK("Read lba 0x%x\n", lba);
 
     // 选择磁盘
     ide_select_drive(disk);
@@ -338,21 +337,16 @@ int ide_pio_read(ide_disk_t* disk, void* buf, u8 count, idx_t lba) {
     // 选择扇区
     ide_select_sector(disk, lba, count);
 
-    ide_busy_wait(ctrl, IDE_SR_DRDY);
-
     // 发送读命令
     outb(ctrl->iobase + IDE_COMMAND, IDE_CMD_READ);
 
 
-    // task_t* task = get_current();
+    task_t* task = get_current();
     for (size_t i = 0; i < count; i++) {
-        // 阻塞自己等待中断的到来，等待磁盘准备数据
-        // ctrl->waiter = task;
-        // task_block(task, NULL, TASK_BLOCKED);
-
-        // if ((ret = ide_busy_wait(ctrl, IDE_SR_DRQ, IDE_TIMEOUT)) < EOK)
-        //     goto rollback;
-
+        if (task->pid != 0) { // idle进程即系统初始化过程的读盘无法异步
+            ctrl->waiter = task;
+            task_block(task, NULL, TASK_BLOCKED); // 阻塞自己等待中断的到来，等待磁盘准备数据
+        }
         ide_busy_wait(ctrl, IDE_SR_DRQ);
         u32 offset = ((u32)buf + i * SECTOR_SIZE);
         ide_pio_read_sector(disk, (u16*)offset);
@@ -375,7 +369,7 @@ int ide_pio_write(ide_disk_t* disk, void* buf, u8 count, idx_t lba) {
 
     int ret = EOK;
 
-    LOGK("write lba 0x%x\n", lba);
+    DEBUGK("Write lba 0x%x\n", lba);
 
     // 选择磁盘
     ide_select_drive(disk);
@@ -388,14 +382,15 @@ int ide_pio_write(ide_disk_t* disk, void* buf, u8 count, idx_t lba) {
 
     // 发送写命令
     outb(ctrl->iobase + IDE_COMMAND, IDE_CMD_WRITE);
-    // task_t* task = get_current();
+    task_t* task = get_current();
     for (size_t i = 0; i < count; i++) {
         u32 offset = ((u32)buf + i * SECTOR_SIZE);
         ide_pio_write_sector(disk, (u16*)offset);
 
-        // 阻塞自己等待中断的到来，等待磁盘准备数据
-        // ctrl->waiter = task;
-        // task_block(task, NULL, TASK_BLOCKED);
+        if (task->pid != 0) { // idle进程即系统初始化过程的写盘无法异步
+            ctrl->waiter = task;
+            task_block(task, NULL, TASK_BLOCKED); // 阻塞自己等待中断的到来，等待磁盘准备数据
+        }
 
         ide_busy_wait(ctrl, IDE_SR_NULL);
     }
@@ -469,14 +464,14 @@ rollback:
 
 //     // 检测错误
 //     if (status & BM_SR_ERR) {
-//         LOGK("IDE dma error %02X\n", status);
+//         DEBUGK("IDE dma error %02X\n", status);
 //         return -EIO;
 //     }
 //     return EOK;
 // }
 
 // err_t ide_udma_read(ide_disk_t* disk, void* buf, u8 count, idx_t lba) {
-//     LOGK("IDE dma read lba 0x%x\n", lba);
+//     DEBUGK("IDE dma read lba 0x%x\n", lba);
 
 //     int ret = 0;
 //     ide_ctrl_t* ctrl = disk->ctrl;
@@ -497,7 +492,7 @@ rollback:
 //     disk->ctrl->waiter = running_task();
 //     if ((ret = task_block(disk->ctrl->waiter, NULL, TASK_BLOCKED,
 //                           IDE_TIMEOUT)) < EOK) {
-//         LOGK("ide dma error occur!!! %d\n", ret);
+//         DEBUGK("ide dma error occur!!! %d\n", ret);
 //     }
 
 //     assert(ide_stop_dma(ctrl) == EOK);
@@ -507,7 +502,7 @@ rollback:
 // }
 
 // err_t ide_udma_write(ide_disk_t* disk, void* buf, u8 count, idx_t lba) {
-//     LOGK("IDE dma write lba 0x%x\n", lba);
+//     DEBUGK("IDE dma write lba 0x%x\n", lba);
 //     int ret = EOK;
 //     ide_ctrl_t* ctrl = disk->ctrl;
 
@@ -527,7 +522,7 @@ rollback:
 //     disk->ctrl->waiter = running_task();
 //     if ((ret = task_block(disk->ctrl->waiter, NULL, TASK_BLOCKED,
 //                           IDE_TIMEOUT)) < EOK) {
-//         LOGK("ide dma error occur!!! %d\n", ret);
+//         DEBUGK("ide dma error occur!!! %d\n", ret);
 //     }
 
 //     assert(ide_stop_dma(ctrl) == EOK);
@@ -680,7 +675,7 @@ rollback:
 //     block_size = ntohl(buf[1]);
 
 //     if (block_size != disk->sector_size) {
-//         LOGK("CD block size warning %d\n", block_size);
+//         DEBUGK("CD block size warning %d\n", block_size);
 //         return 0;
 //     }
 //     return block_count;
@@ -769,7 +764,7 @@ rollback:
 // }
 
 // static err_t ide_identify(ide_disk_t* disk, u16* buf) {
-//     LOGK("identifing disk %s...\n", disk->name);
+//     DEBUGK("identifing disk %s...\n", disk->name);
 //     lock_acquire(&disk->ctrl->lock);
 //     ide_select_drive(disk);
 
@@ -790,13 +785,13 @@ rollback:
 //     ide_pio_read_sector(disk, buf);
 
 //     ide_fixstrings(params->serial, sizeof(params->serial));
-//     LOGK("disk %s serial number %s\n", disk->name, params->serial);
+//     DEBUGK("disk %s serial number %s\n", disk->name, params->serial);
 
 //     ide_fixstrings(params->firmware, sizeof(params->firmware));
-//     LOGK("disk %s firmware version %s\n", disk->name, params->firmware);
+//     DEBUGK("disk %s firmware version %s\n", disk->name, params->firmware);
 
 //     ide_fixstrings(params->model, sizeof(params->model));
-//     LOGK("disk %s model number %s\n", disk->name, params->model);
+//     DEBUGK("disk %s model number %s\n", disk->name, params->model);
 
 //     if (disk->interface == IDE_INTERFACE_ATAPI) {
 //         ret = EOK;
@@ -807,7 +802,7 @@ rollback:
 //         ret = -EIO;
 //         goto rollback;
 //     }
-//     LOGK("disk %s total lba %d\n", disk->name, params->total_lba);
+//     DEBUGK("disk %s total lba %d\n", disk->name, params->total_lba);
 
 //     disk->total_lba = params->total_lba;
 //     disk->cylinders = params->cylinders;
@@ -839,11 +834,11 @@ rollback:
 
 //         sprintf(part->name, "%s%d", disk->name, i + 1);
 
-//         LOGK("part %s \n", part->name);
-//         LOGK("    bootable %d\n", entry->bootable);
-//         LOGK("    start %d\n", entry->start);
-//         LOGK("    count %d\n", entry->count);
-//         LOGK("    system 0x%x\n", entry->system);
+//         DEBUGK("part %s \n", part->name);
+//         DEBUGK("    bootable %d\n", entry->bootable);
+//         DEBUGK("    start %d\n", entry->start);
+//         DEBUGK("    count %d\n", entry->count);
+//         DEBUGK("    system 0x%x\n", entry->system);
 
 //         part->disk = disk;
 //         part->count = entry->count;
@@ -851,7 +846,7 @@ rollback:
 //         part->start = entry->start;
 
 //         if (entry->system == PART_FS_EXTENDED) {
-//             LOGK("Unsupported extended partition!!!\n");
+//             DEBUGK("Unsupported extended partition!!!\n");
 
 //             boot_sector_t* eboot = (boot_sector_t*)(buf + SECTOR_SIZE);
 //             ide_pio_read(disk, (void*)eboot, 1, entry->start);
@@ -860,11 +855,11 @@ rollback:
 //                 part_entry_t* eentry = &eboot->entry[j];
 //                 if (!eentry->count)
 //                     continue;
-//                 LOGK("part %d extend %d\n", i, j);
-//                 LOGK("    bootable %d\n", eentry->bootable);
-//                 LOGK("    start %d\n", eentry->start);
-//                 LOGK("    count %d\n", eentry->count);
-//                 LOGK("    system 0x%x\n", eentry->system);
+//                 DEBUGK("part %d extend %d\n", i, j);
+//                 DEBUGK("    bootable %d\n", eentry->bootable);
+//                 DEBUGK("    start %d\n", eentry->start);
+//                 DEBUGK("    count %d\n", eentry->count);
+//                 DEBUGK("    system 0x%x\n", eentry->system);
 //             }
 //         }
 //     }
@@ -881,7 +876,7 @@ rollback:
 //         int ret = pci_find_bar(device, &bar, PCI_BAR_TYPE_IO);
 //         assert(ret == EOK);
 
-//         LOGK("find dev 0x%x io bar 0x%x size %d\n", device, bar.iobase,
+//         DEBUGK("find dev 0x%x io bar 0x%x size %d\n", device, bar.iobase,
 //              bar.size);
 
 //         pci_enable_busmastering(device);
@@ -924,12 +919,12 @@ rollback:
 //                 disk->selector = IDE_LBA_MASTER;
 //             }
 //             if (ide_probe_device(disk) < 0) {
-//                 LOGK("IDE device %s not exists...\n", disk->name);
+//                 DEBUGK("IDE device %s not exists...\n", disk->name);
 //                 continue;
 //             }
 
 //             disk->interface = ide_interface_type(disk);
-//             LOGK("IDE device %s type %d...\n", disk->name, disk->interface);
+//             DEBUGK("IDE device %s type %d...\n", disk->name, disk->interface);
 //             if (disk->interface == IDE_INTERFACE_UNKNOWN)
 //                 continue;
 
@@ -939,11 +934,11 @@ rollback:
 //                     ide_part_init(disk, buf);
 //                 }
 //             } else if (disk->interface == IDE_INTERFACE_ATAPI) {
-//                 LOGK("Disk %s interface is ATAPI\n", disk->name);
+//                 DEBUGK("Disk %s interface is ATAPI\n", disk->name);
 //                 disk->sector_size = CD_SECTOR_SIZE;
 //                 if (ide_identify(disk, buf) == EOK) {
 //                     disk->total_lba = ide_atapi_read_capacity(disk);
-//                     LOGK("disk %s total lba %d\n", disk->name,
+//                     DEBUGK("disk %s total lba %d\n", disk->name,
 //                     disk->total_lba);
 //                 }
 //             }
@@ -1011,7 +1006,7 @@ static void ide_ctrl_init() {
                 disk->selector = IDE_LBA_SLAVE;
             } else {
                 disk->master = true;
-                disk->selector - IDE_LBA_MASTER;
+                disk->selector = IDE_LBA_MASTER;
             }
         }
     }
@@ -1019,38 +1014,38 @@ static void ide_ctrl_init() {
 
 // ide 硬盘初始化
 void ide_init() {
-    // LOGK("ide init...\n");
+    ide_ctrl_init();
 
-    // // 注册硬盘中断，并打开屏蔽字
-    // set_interrupt_handler(IRQ_HARDDISK, ide_handler);
-    // set_interrupt_handler(IRQ_HARDDISK2, ide_handler);
-    // set_interrupt_mask(IRQ_HARDDISK, true);
-    // set_interrupt_mask(IRQ_HARDDISK2, true);
-    // set_interrupt_mask(IRQ_CASCADE, true);
+    // 注册硬盘中断，并打开屏蔽字
+    set_interrupt_handler(IRQ_HARDDISK, ide_handler);
+    set_interrupt_handler(IRQ_HARDDISK2, ide_handler);
+    set_interrupt_mask(IRQ_HARDDISK, true);
+    set_interrupt_mask(IRQ_HARDDISK2, true);
+    set_interrupt_mask(IRQ_CASCADE, true);
 
     // ide_ctrl_init();
 
     // ide_install();  // 安装设备
 
-    ide_ctrl_init();
+    DEBUGK("ide initialized...\n");
+}
+
+void sys_test(){
+    DEBUGK("sys_test...\n");
+
     char* buf = (char*)alloc_kpage(1);
     DEBUGK("read buffer %x\n", buf);
 
-    ide_pio_read(&controllers[0].disks[0], buf, 1, 1);
+    ide_pio_read(&controllers[0].disks[0], buf, 1, 0);
     for (int j = 0 ; j < 8; ++j){
         for (int i = 0 ;i < 8; ++i){
             printk("%02x ", (u8)buf[j*8+i]);
         }
         printk("\n");
     }
-    memset(buf, 0x5a, SECTOR_SIZE);
-    ide_pio_write(&controllers[0].disks[0], buf, 1, 2);
+    // memset(buf, 0x5a, SECTOR_SIZE);
+    // ide_pio_write(&controllers[0].disks[0], buf, 1, 1);
 
     free_kpage((u32)buf, 1);
     
-    panic("ok, check value...\n");
-    
-    DEBUGK("ide initialized...\n");
-
-
 }
