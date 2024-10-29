@@ -77,6 +77,7 @@ typedef enum syscall_t
 } syscall_t;
 
 
+void test(void);
 void yield(void);
 void sleep(u32 ms);
 int32 write(fd_t fd, char *buf, u32 len);

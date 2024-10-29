@@ -16,6 +16,7 @@
 #include <sys/types.h>
 #include <lightos/task.h>
 #include <lib/arena.h>
+#include <lightos/ide.h>
 
 extern void clock_init();           // clock.c 无 .h
 extern void syscall_init(void);     // gate.c
@@ -53,6 +54,8 @@ void kernel_init(void) {
 
     aerna_init();
     kmap_init();
+
+    ide_init(); //硬盘驱动初始化
 
     idle(); //set stack & sti
 }

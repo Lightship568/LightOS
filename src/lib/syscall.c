@@ -45,6 +45,10 @@ static _inline u32 _syscall3(u32 nr, u32 arg1, u32 arg2, u32 arg3){
 }
 
 // 内核的系统调用封装
+void test(void){
+    _syscall0(SYS_NR_TEST);
+}
+
 void yield(void){
     _syscall0(SYS_NR_YIELD);
 }

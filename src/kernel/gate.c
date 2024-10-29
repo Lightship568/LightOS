@@ -30,6 +30,7 @@ void syscall_init(void){
     for (size_t i = 0; i < NR_SYSCALL; ++i){
         syscall_table[i] = sys_default;
     }
+    syscall_table[SYS_NR_TEST]      = sys_yield;
     syscall_table[SYS_NR_YIELD]     = sys_yield;
     syscall_table[SYS_NR_SLEEP]     = sys_sleep;
     syscall_table[SYS_NR_WRITE]     = sys_write;
