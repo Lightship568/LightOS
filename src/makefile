@@ -158,7 +158,7 @@ QEMU+= -rtc base=localtime
 
 QEMU_DISK:= -boot c
 QEMU_DISK+= -drive file=$(BUILD)/LightOS.img,if=ide,index=0,media=disk,format=raw 	# 主硬盘
-# QEMU_DISK += -drive file=$(BUILD)/slave.img,if=ide,index=1,media=disk,format=raw 	# 从硬盘
+QEMU_DISK += -drive file=$(BUILD)/slave.img,if=ide,index=1,media=disk,format=raw 	# 从硬盘
 
 QEMU_CDROM:= -boot d
 QEMU_CDROM+= -drive file=$(BUILD)/kernel.iso,media=cdrom
@@ -167,21 +167,26 @@ QEMU_CDROM+= -drive file=$(BUILD)/LightOS.img,if=ide,index=1,media=disk,format=r
 
 QEMU_DEBUG:=-s -S
 
+$(BUILD)/slave.img:
+	yes | bximage -q -hd=32 -func=create -sectsize=512 -imgmode=flat $@
+IMAGES:= $(BUILD)/LightOS.img $(BUILD)/slave.img
+# image: $(IMAGES)
+
 .PHONY: qemu
-qemu: $(BUILD)/LightOS.img
+qemu: $(IMAGES)
 	$(QEMU) $(QEMU_DISK)
 
 .PHONY: qemug
-qemug: $(BUILD)/LightOS.img
+qemug: $(IMAGES)
 	$(QEMU) $(QEMU_DISK) $(QEMU_DEBUG)
 
-.PHONY: qemu-grub
-qemu-grub: $(BUILD)/kernel.iso
-	$(QEMU) $(QEMU_CDROM)
+# .PHONY: qemu-grub
+# qemu-grub: $(BUILD)/kernel.iso
+# 	$(QEMU) $(QEMU_CDROM)
 
-.PHONY: qemug-grub
-qemug-grub: $(BUILD)/kernel.iso
-	$(QEMU) $(QEMU_CDROM) $(QEMU_DEBUG)
+# .PHONY: qemug-grub
+# qemug-grub: $(BUILD)/kernel.iso
+# 	$(QEMU) $(QEMU_CDROM) $(QEMU_DEBUG)
 
 .PHONY: iso
 iso: $(BUILD)/kernel.iso

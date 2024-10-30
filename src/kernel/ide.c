@@ -208,9 +208,8 @@ static void ide_delay() {
 static int32 ide_busy_wait(ide_ctrl_t* ctrl, u8 mask) { // 同步pio
     while (true) {
         u8 state = inb(ctrl->iobase + IDE_ALT_STATUS); // 这里读备用是因为，如果读了常规状态寄存器，则IDE中断不会触发
-        if (state & IDE_SR_ERR) {  // 有错误
+        if (state & IDE_SR_ERR) {  // 有错误（或者识别设备不存在）
             ide_error(ctrl);
-            panic("error\n");
         }
         if (state & IDE_SR_BSY) { // 驱动器忙
             continue;
@@ -984,18 +983,56 @@ rollback:
 //     }
 // }
 
+static u32 ide_identify(ide_disk_t* disk, u16* buf) {
+    // IDE设备不支持热插拔，因此初始化过程无需互斥锁
+    // mutex_lock(&disk->ctrl->lock);
+
+    ide_select_drive(disk);
+    outb(disk->ctrl->iobase + IDE_COMMAND, IDE_CMD_IDENTIFY);
+
+    ide_busy_wait(disk->ctrl, IDE_SR_NULL);
+
+    ide_params_t* params = (ide_params_t*)buf;
+
+    ide_pio_read_sector(disk, buf);
+
+    u32 ret = EOF;
+    if (params->total_lba == 0){
+        goto rollback;
+    }
+
+    DEBUGK("disk %s:\n", disk->name);
+    printk("  > total lba        : %d\n",  params->total_lba);
+    printk("  > serial number    :%s\n", params->serial);
+    printk("  > firmware version :%s\n", params->firmware);
+    printk("  > modle numberl    :%s\n", params->serial);
+
+    disk->total_lba = params->total_lba;
+    disk->cylinders = params->cylinders;
+    disk->heads = params->heads;
+    disk->sector_size = params->sectors;
+    ret = 0;
+rollback:
+    // mutex_unlock(&disk->ctrl->lock);
+    return ret;
+}
+
 static void ide_ctrl_init() {
+    u16* buf = (u16*)alloc_kpage(1);
     for (size_t cidx = 0; cidx < IDE_CTRL_NR; cidx++) {
         ide_ctrl_t* ctrl = &controllers[cidx];
         sprintf(ctrl->name, "ide%u", cidx);
         mutex_init(&ctrl->lock);
-        ctrl->active = NULL;
 
+        ctrl->active = NULL;
+        ctrl->waiter = NULL;
         if (cidx) {  // 从通道
             ctrl->iobase = IDE_IOBASE_SECONDARY;
         } else {  // 主通道
             ctrl->iobase = IDE_IOBASE_PRIMARY;
         }
+        ctrl->control = inb(ctrl->iobase + IDE_CONTROL);
+
         for (size_t didx = 0; didx < IDE_DISK_NR; didx++) {
             ide_disk_t* disk = &ctrl->disks[didx];
             sprintf(disk->name, "hd%c", 'a' + cidx * 2 + didx);  // hd[abcd] 四个盘
@@ -1008,8 +1045,10 @@ static void ide_ctrl_init() {
                 disk->master = true;
                 disk->selector = IDE_LBA_MASTER;
             }
+            ide_identify(disk, buf);
         }
     }
+    free_kpage((u32)buf, 1);
 }
 
 // ide 硬盘初始化
@@ -1031,21 +1070,21 @@ void ide_init() {
 }
 
 void sys_test(){
-    DEBUGK("sys_test...\n");
+    // DEBUGK("sys_test...\n");
 
-    char* buf = (char*)alloc_kpage(1);
-    DEBUGK("read buffer %x\n", buf);
+    // char* buf = (char*)alloc_kpage(1);
+    // DEBUGK("read buffer %x\n", buf);
 
-    ide_pio_read(&controllers[0].disks[0], buf, 1, 0);
-    for (int j = 0 ; j < 8; ++j){
-        for (int i = 0 ;i < 8; ++i){
-            printk("%02x ", (u8)buf[j*8+i]);
-        }
-        printk("\n");
-    }
-    // memset(buf, 0x5a, SECTOR_SIZE);
-    // ide_pio_write(&controllers[0].disks[0], buf, 1, 1);
+    // ide_pio_read(&controllers[0].disks[0], buf, 1, 0);
+    // for (int j = 0 ; j < 8; ++j){
+    //     for (int i = 0 ;i < 8; ++i){
+    //         printk("%02x ", (u8)buf[j*8+i]);
+    //     }
+    //     printk("\n");
+    // }
+    // // memset(buf, 0x5a, SECTOR_SIZE);
+    // // ide_pio_write(&controllers[0].disks[0], buf, 1, 1);
 
-    free_kpage((u32)buf, 1);
+    // free_kpage((u32)buf, 1);
     
 }
