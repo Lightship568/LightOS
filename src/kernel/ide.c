@@ -208,7 +208,7 @@ static void ide_delay() {
 static int32 ide_busy_wait(ide_ctrl_t* ctrl, u8 mask) { // 同步pio
     while (true) {
         u8 state = inb(ctrl->iobase + IDE_ALT_STATUS); // 这里读备用是因为，如果读了常规状态寄存器，则IDE中断不会触发
-        if (state & IDE_SR_ERR) {  // 有错误（或者识别设备不存在）
+        if (state & IDE_SR_ERR) {
             ide_error(ctrl);
         }
         if (state & IDE_SR_BSY) { // 驱动器忙
@@ -321,7 +321,7 @@ int ide_pio_read(ide_disk_t* disk, void* buf, u8 count, idx_t lba) {
 
     ide_ctrl_t* ctrl = disk->ctrl;
 
-    mutex_lock(&ctrl->lock);
+    mutex_lock(&ctrl->lock); // idle初始化也可以加锁，此时一定可以成功获取不会阻塞
 
     int ret = -EIO;
 
@@ -416,14 +416,14 @@ rollback:
 // }
 
 // 读分区
-// int ide_pio_part_read(ide_part_t* part, void* buf, u8 count, idx_t lba) {
-//     return ide_pio_read(part->disk, buf, count, part->start + lba);
-// }
+int ide_pio_part_read(ide_part_t* part, void* buf, u8 count, idx_t lba) {
+    return ide_pio_read(part->disk, buf, count, part->start + lba);
+}
 
-// // 写分区
-// int ide_pio_part_write(ide_part_t* part, void* buf, u8 count, idx_t lba) {
-//     return ide_pio_write(part->disk, buf, count, part->start + lba);
-// }
+// 写分区
+int ide_pio_part_write(ide_part_t* part, void* buf, u8 count, idx_t lba) {
+    return ide_pio_write(part->disk, buf, count, part->start + lba);
+}
 
 // static void ide_setup_dma(ide_ctrl_t* ctrl, int cmd, char* buf, u32 len) {
 //     // 保证没有跨页
@@ -864,6 +864,72 @@ rollback:
 //     }
 // }
 
+static void ide_part_init(ide_disk_t* disk, u16* buf){
+    boot_sector_t* boot;    // MBR 起始扇区
+    part_entry_t* entry;    // 分区表项
+    ide_part_t* part;       // disk中的分区表项信息
+
+    boot_sector_t* eboot;    // 扩展分区起始扇区
+    part_entry_t* eentry;    // 扩展分区表项
+
+    DEBUGK("Checking Disk %s Partition Information\n", disk->name);
+
+    // 读取MBR扇区
+    ide_pio_read(disk, buf, 1, 0);
+
+    boot = (boot_sector_t*)buf;
+
+    // 防止vmware的IDE不是MBR
+    if (boot->signature != 0xaa55){
+        DEBUGK("Disk %s isn't MBR format\n", disk->name);
+        return;
+    }
+    
+
+    for(size_t i = 0; i < IDE_PART_NR; ++i){
+        entry = &boot->entry[i];
+        part = &disk->parts[i];
+        if (!entry->count){
+            continue;
+        }
+
+        // 设置分区信息到 disk->part[i]
+        sprintf(part->name, "%s%d", disk->name, i+1);
+        part->disk = disk;
+        part->count = entry->count;
+        part->system = entry->system;
+        part->start = entry->start;
+
+        DEBUGK("Disk Part Info: %s\n", part->name);
+        printf("    bootable: %d\n", entry->bootable);
+        printf("    start   : %d\n", entry->start);
+        printf("    count   : %d\n", entry->count);
+        printf("    system  : 0x%x\n", entry->system);
+
+        // 扩展分区单独处理（暂不支持，需要扩大disk->part[N]，动态大小不是很方便）
+        if (entry->system == PART_FS_EXTENDED){
+            DEBUGK("WARN: Disk Extened Partition Unsupport\n");
+            
+            eboot = (boot_sector_t*)(buf + SECTOR_SIZE); // 使用buf后半，防止覆盖boot
+            ide_pio_read(disk, (void*)eboot, 1, entry->start);
+            
+            for(size_t j = 0; j < IDE_PART_NR; ++j){
+                eentry = &eboot->entry[j];
+                if (!eentry->count){
+                    continue;
+                }
+                DEBUGK("Disk Extend Part Info: %s part %d extend %d\n", part->name, i, j);
+                printf("    bootable: %d\n", eentry->bootable);
+                printf("    start   : %d\n", eentry->start);
+                printf("    count   : %d\n", eentry->count);
+                printf("    system  : 0x%x\n", eentry->system);
+            }
+            
+        }
+    }
+    DEBUGK("Disk %s Partition Information Checked\n", disk->name);
+}
+
 // ide 控制器初始化
 // static void ide_ctrl_init() {
 //     int iotype = IDE_TYPE_PIO;
@@ -983,11 +1049,24 @@ rollback:
 //     }
 // }
 
+static void ide_fixstrings(char *buf, u32 len) {
+    for (size_t i = 0; i < len; i += 2)
+    {
+        register char ch = buf[i];
+        buf[i] = buf[i + 1];
+        buf[i + 1] = ch;
+    }
+    buf[len - 1] = '\0';
+}
+
 static u32 ide_identify(ide_disk_t* disk, u16* buf) {
+
+    DEBUGK("Identifing Disk %s\n", disk->name);
     // IDE设备不支持热插拔，因此初始化过程无需互斥锁
     // mutex_lock(&disk->ctrl->lock);
 
     ide_select_drive(disk);
+
     outb(disk->ctrl->iobase + IDE_COMMAND, IDE_CMD_IDENTIFY);
 
     ide_busy_wait(disk->ctrl, IDE_SR_NULL);
@@ -998,11 +1077,17 @@ static u32 ide_identify(ide_disk_t* disk, u16* buf) {
 
     u32 ret = EOF;
     if (params->total_lba == 0){
+        DEBUGK("Disk %s does'nt exsit\n", disk->name);
         goto rollback;
     }
 
-    DEBUGK("disk %s:\n", disk->name);
-    printk("  > total lba        : %d\n",  params->total_lba);
+    ide_fixstrings(params->serial, sizeof(params->serial));
+    ide_fixstrings(params->firmware, sizeof(params->firmware));
+    ide_fixstrings(params->serial, sizeof(params->serial));
+
+    DEBUGK("Find Disk %s:\n", disk->name);
+    
+    printk("  > total lba        :%d\n",  params->total_lba);
     printk("  > serial number    :%s\n", params->serial);
     printk("  > firmware version :%s\n", params->firmware);
     printk("  > modle numberl    :%s\n", params->serial);
@@ -1010,7 +1095,7 @@ static u32 ide_identify(ide_disk_t* disk, u16* buf) {
     disk->total_lba = params->total_lba;
     disk->cylinders = params->cylinders;
     disk->heads = params->heads;
-    disk->sector_size = params->sectors;
+    disk->sectors = params->sectors;
     ret = 0;
 rollback:
     // mutex_unlock(&disk->ctrl->lock);
@@ -1026,11 +1111,7 @@ static void ide_ctrl_init() {
 
         ctrl->active = NULL;
         ctrl->waiter = NULL;
-        if (cidx) {  // 从通道
-            ctrl->iobase = IDE_IOBASE_SECONDARY;
-        } else {  // 主通道
-            ctrl->iobase = IDE_IOBASE_PRIMARY;
-        }
+        ctrl->iobase = cidx?IDE_IOBASE_SECONDARY:IDE_IOBASE_PRIMARY; // 主从通道
         ctrl->control = inb(ctrl->iobase + IDE_CONTROL);
 
         for (size_t didx = 0; didx < IDE_DISK_NR; didx++) {
@@ -1038,15 +1119,14 @@ static void ide_ctrl_init() {
             sprintf(disk->name, "hd%c", 'a' + cidx * 2 + didx);  // hd[abcd] 四个盘
             disk->ctrl = ctrl;
             disk->sector_size = SECTOR_SIZE;
-            if (didx) {                      // 从盘
-                disk->master = false;
-                disk->selector = IDE_LBA_SLAVE;
-            } else {
-                disk->master = true;
-                disk->selector = IDE_LBA_MASTER;
+            disk->selector = didx?IDE_LBA_SLAVE:IDE_LBA_MASTER; // 主从盘
+            disk->master = (didx==0);
+            if (ide_identify(disk, buf) == 0){
+                ide_part_init(disk, buf);
             }
-            ide_identify(disk, buf);
+            break;
         }
+        break;
     }
     free_kpage((u32)buf, 1);
 }
@@ -1062,9 +1142,8 @@ void ide_init() {
     set_interrupt_mask(IRQ_HARDDISK2, true);
     set_interrupt_mask(IRQ_CASCADE, true);
 
-    // ide_ctrl_init();
-
     // ide_install();  // 安装设备
+
 
     DEBUGK("ide initialized...\n");
 }

@@ -1981,7 +1981,70 @@ QEMU_CDROM+= -drive file=$(BUILD)/kernel.iso,media=cdrom
 
 但是第三次硬盘发现（hdc）时会触发abort，第四次（hdd）就不会，Onix视频中同样会触发一次abort，但原理不明。
 
+### 分区
 
+使用 fdisk 工具对 img 进行分区
+
+```bash
+fdisk LightOS.img
+# m打印help, w是写入并退出
+$p
+Device       Boot Start   End Sectors  Size Id Type
+LightOS.img1       2048 18431   16384    8M 83 Linux
+LightOS.img2      18432 32255   13824  6.8M  5 Extended
+LightOS.img5      20480 32255   11776  5.8M 83 Linux
+```
+
+备份与挂载
+
+```bash
+# 分区备份
+sfdisk -d /dev/... > master.sfdisk
+
+# 有分区信息可以直接对磁盘进行分区
+sfdisk /dev/... < master.sfdisk
+
+# 可以将磁盘挂载到系统来查看一下
+sudo losetup /dev/loop0 --partscan LightOS.imf
+# 取消挂载
+sudo losetup -d /dev/loop0
+```
+
+实测遇到了loop0被占用的情况，因此自动分配，如下所示，分配到了loop14
+
+```bash
+$ sudo losetup --partscan -f LightOS.img
+$ sudo losetup -l
+NAME        SIZELIMIT OFFSET AUTOCLEAR RO BACK-FILE                                               DIO LOG-SEC
+/dev/loop1          0      0         1  1 /var/lib/snapd/snaps/core22_1663.snap                     0     512
+/dev/loop8          0      0         1  1 /var/lib/snapd/snaps/snap-store_1216.snap                 0     512
+/dev/loop6          0      0         1  1 /var/lib/snapd/snaps/gnome-42-2204_176.snap               0     512
+/dev/loop13         0      0         1  1 /var/lib/snapd/snaps/snapd-desktop-integration_253.snap   0     512
+/dev/loop4          0      0         1  1 /var/lib/snapd/snaps/firefox_5134.snap                    0     512
+/dev/loop11         0      0         1  1 /var/lib/snapd/snaps/snapd_21759.snap                     0     512
+/dev/loop2          0      0         1  1 /var/lib/snapd/snaps/core22_1621.snap                     0     512
+/dev/loop0          0      0         1  1 /var/lib/snapd/snaps/bare_5.snap                          0     512
+/dev/loop9          0      0         1  1 /var/lib/snapd/snaps/snap-store_1113.snap                 0     512
+/dev/loop7          0      0         1  1 /var/lib/snapd/snaps/gtk-common-themes_1535.snap          0     512
+/dev/loop14         0      0         0  0 /mnt/hgfs/LightOS/build/LightOS.img                       0     512
+/dev/loop5          0      0         1  1 /var/lib/snapd/snaps/gnome-42-2204_141.snap               0     512
+/dev/loop12         0      0         1  1 /var/lib/snapd/snaps/snapd-desktop-integration_247.snap   0     512
+/dev/loop3          0      0         1  1 /var/lib/snapd/snaps/firefox_5091.snap                    0     512
+/dev/loop10         0      0         1  1 /var/lib/snapd/snaps/snapd_20671.snap                     0     512
+$ lsblk
+...
+loop14       7:14   0  15.8M  0 loop 
+├─loop14p1 259:3    0     8M  0 part 
+├─loop14p2 259:4    0     1K  0 part 
+└─loop14p5 259:5    0   5.8M  0 part
+```
+
+### IDE 硬件的相关问题记录
+
+* IDE 读盘的命令都是按照扇区为单位，如果扇区大小（sector_size）定义错误，则会导致后续所有的读取都出现偏移。原理是南桥总线会为每个设备设置一个缓冲区，in命令本质就是从缓冲区中读取数据，因此也不需要进行主动延迟。
+
+* qemu中，hdc设备识别时会触发abort，hda, hdb, hdd 都不会。
+* 最终 qemu 正常启动，但vmware启动会失败，在busy中死循环了（没进入任何if分支），观察输出才想起来vmware的IDE是独立的，不是MBR格式。那么需要在分区检查中增加MBR检测，非MBR的进行跳过。
 
 
 

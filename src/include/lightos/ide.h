@@ -14,6 +14,7 @@
 #define IDE_TYPE_PIO 0   // Programming Input Output
 #define IDE_TYPE_UDMA 1  // Ultra DMA
 
+// MBR 中的分区表项，每个16字节，共4个
 typedef struct part_entry_t {
     u8 bootable;              // 引导标志
     u8 start_head;            // 分区起始磁头号
@@ -27,12 +28,14 @@ typedef struct part_entry_t {
     u32 count;                // 分区占用的扇区数
 } _packed part_entry_t;
 
+// MBR 中的分区表（起始于首个扇区的446字节）
 typedef struct boot_sector_t {
     u8 code[446];
     part_entry_t entry[4];
-    u16 signature;
+    u16 signature; // 0x55 0xaa
 } _packed boot_sector_t;
 
+// OS 读取的分区信息
 typedef struct ide_part_t {
     char name[8];             // 分区名称
     struct ide_disk_t* disk;  // 磁盘指针
