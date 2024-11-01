@@ -33,11 +33,15 @@ void sys_test(){
     char ch;
     device_t* device;
 
-    device = device_find(DEV_KEYBOARD, 0);
-    assert(device != NULL);
-    device_read(device->dev, &ch, 1, 0 ,0);
+    void* buf = (void*)alloc_kpage(1);
+    device = device_find(DEV_IDE_PART, 0);
+    assert(device);
+
+    memset(buf, get_current()->pid, 512);
+
+    device_request(device->dev, buf, 1, get_current()->pid, 0, REQUEST_WRITE);
     
-    printk("%c", ch);
+    free_kpage((u32)buf, 1);
 
 }
 

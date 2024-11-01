@@ -75,8 +75,12 @@ extern int printf(const char *fmt, ...);
 void init_uthread(void){
     int pid;
     int status;
+    fork();
+    fork();
+    test();
+    printf("pid %d finished\n", getpid());
     while (true){
-        test();
+        sleep(1000);
     }
 }
 

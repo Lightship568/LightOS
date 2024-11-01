@@ -102,5 +102,64 @@ void device_init() {
         device->ioctl = NULL;
         device->read = NULL;
         device->write = NULL;
+        list_init(&device->request_list);
     }
+}
+
+static void do_request(request_t* req){
+    switch (req->type) {
+    case REQUEST_READ:
+        device_read(req->dev, req->buf, req->count, req->idx, req->flags);
+        break;
+    case REQUEST_WRITE:
+        device_write(req->dev, req->buf, req->count, req->idx, req->flags);
+        break;
+    default:
+        panic("Request type 0x%x undefined error\n", req->type);
+        break;
+    }
+}
+
+void device_request(dev_t dev, void* buf, u8 count, idx_t idx, int flags, u32 type){
+    device_t* device = device_get(dev);
+    // 保证是块设备
+    assert(device->type = DEV_BLOCK);
+
+    if (device->parent){ // 找到父设备，也就是根盘，为了管理 req 队列
+        device =  device_get(device->parent);
+    }
+
+    request_t* req = kmalloc(sizeof(request_t));
+    req->dev = dev;
+    req->buf = buf;
+    req->count = count;
+    req->idx = idx;
+    req->flags = flags;
+    req->type = type;
+    req->task = get_current();
+
+    bool empty = list_empty(&device->request_list);
+
+    // 将请求压入对应设备的请求链表
+    list_push(&device->request_list, &req->node);
+
+    // 若有请求正在等待处理，则阻塞自己
+    if (!empty){
+        task_block(req->task, NULL, TASK_BLOCKED);
+    }
+
+    do_request(req);
+
+    list_remove(&req->node);
+
+    kfree(req);
+    req = NULL;
+
+    // 暂时 FIFO，恢复下一个 request 的任务
+    if (!list_empty(&device->request_list)){
+        req = element_entry(request_t, node, device->request_list.head.next);
+        assert(req->task->magic == LIGHTOS_MAGIC);
+        task_intr_unblock_no_waiting_list(req->task);
+    }
+
 }

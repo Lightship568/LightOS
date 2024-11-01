@@ -418,6 +418,7 @@ void task_unblock(list_t* waiting_list) {
     if (!list_empty(waiting_list)) {
         pnode = list_pop(waiting_list);
         task = element_entry(task_t, node, pnode);
+        assert(task->magic == LIGHTOS_MAGIC);
         task->state = TASK_READY;
         schedule();  // 如果不主动让出，很可能循环获取资源导致阻塞的进程饿死
     }
