@@ -5,6 +5,7 @@
 #include <lib/kfifo.h>
 #include <lib/mutex.h>
 #include <lightos/task.h>
+#include <lightos/device.h>
 
 #define KEYBOARD_DATA_PORT 0x60
 #define KEYBOARD_CTRL_PORT 0x64
@@ -230,7 +231,7 @@ static task_t* fg_task;      // 阻塞并等待输入的前台进程
 
 static bool capslock_state = false;  // 大写锁定
 static bool scrlock_state = false;   // 滚动锁定
-static bool numlock_state = false;   // 数字锁定
+static bool numlock_state = true;   // 数字锁定
 static bool extcode_state = false;   // 扩展码状态
 
 // CTRL 键状态（左右）
@@ -351,7 +352,7 @@ void keyboard_handler(int vector) {
     }
 }
 
-u32 keyboard_read(char* buf, u32 count){
+u32 keyboard_read(dev_t dev, char* buf, u32 count){
     // todo: 完成 tty 后就不能在这么底层实现read了，应该需要单个字符立即传给tty全局缓冲区，
     // 由tty实现终端回显、区分不同的fg_task、再检查\n或根据flush，将字符串整体推送到fg的缓冲区。
     // 否则无法实现tty控制以及fg的切换，目前先这样测试。
@@ -375,6 +376,10 @@ void keyboard_init(void) {
 
     fg_task = NULL;
 
+    set_led();
+
     set_interrupt_handler(IRQ_KEYBOARD, keyboard_handler);
     set_interrupt_mask(IRQ_KEYBOARD, true);
+
+    device_install(DEV_CHAR, DEV_KEYBOARD, NULL, "keyboard", 0, NULL, keyboard_read, NULL);
 }

@@ -4,6 +4,7 @@
 #include <lib/debug.h>
 #include <lib/mutex.h>
 #include <lightos/memory.h>
+#include <lightos/device.h>
 
 #define CRT_ADDR_REG 0x3D4 // CRT(6845)索引寄存器
 #define CRT_DATA_REG 0x3D5 // CRT(6845)数据寄存器
@@ -136,7 +137,8 @@ void console_clear(void){
 }
 
 extern void start_beep(void);
-int32 console_write(char *buf, u32 count){
+
+int32 console_write(void* dev, char *buf, u32 count){
     char ch;
     int32 nr = 0;
 
@@ -207,5 +209,6 @@ int32 console_write(char *buf, u32 count){
 void console_init(void){
     console_clear(); 
     mutex_init(&mutex_console);
+    device_install(DEV_CHAR, DEV_CONSOLE, NULL, "console", 0, NULL, NULL, console_write);
     DEBUGK("Console initialized\n"); 
 }

@@ -3,8 +3,11 @@
 #include <lightos/interrupt.h>
 #include <lightos/task.h>
 #include <lib/debug.h>
+#include <lib/print.h>
 #include <lightos/console.h>
 #include <lightos/memory.h>
+#include <lightos/device.h>
+#include <sys/assert.h>
 
 u32 nr_syscall = NR_SYSCALL;
 handler_t syscall_table[NR_SYSCALL];
@@ -15,16 +18,30 @@ u32 sys_default(u32 vector, u32 edi, u32 esi, u32 ebp, u32 esp, u32 ebx,u32 edx,
     return -1;
 }
 
+extern int32 console_write(void* dev, char *buf, u32 count);
 u32 sys_write(fd_t fd, char* buf, u32 len){
     if (fd == stdout){
-        return console_write(buf, len);
-
+        return console_write(NULL, buf, len);
     }
     return -1;
 }
 
 extern time_t sys_time(); // clock.c
-extern void sys_test(); // anywhere
+
+
+void sys_test(){
+    char ch;
+    device_t* device;
+
+    device = device_find(DEV_KEYBOARD, 0);
+    assert(device != NULL);
+    device_read(device->dev, &ch, 1, 0 ,0);
+    
+    printk("%c", ch);
+
+}
+
+// extern void sys_test(); // anywhere
 
 // 系统调用表初始化，把散落各处的sys_处理函数指针保存到表中
 void syscall_init(void){

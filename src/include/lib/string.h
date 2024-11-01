@@ -10,6 +10,7 @@
 #include <sys/types.h>
 
 char *strcpy(char *dest, const char *src);
+// 添加字符串EOS
 char *strncpy(char *dest, const char *src, size_t count);
 char *strcat(char *dest, const char *src);
 size_t strlen(const char *str);

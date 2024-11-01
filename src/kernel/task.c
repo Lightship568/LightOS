@@ -13,7 +13,7 @@
 #include <lib/bitmap.h>
 #include <lib/arena.h>
 
-extern u32 keyboard_read(char* buf, u32 count);
+extern u32 keyboard_read(dev_t dev, char* buf, u32 count);
 extern void init_kthread(void);
 
 task_t* task_list[NR_TASKS] = {0};

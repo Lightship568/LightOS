@@ -77,29 +77,6 @@ void init_uthread(void){
     int status;
     while (true){
         test();
-        sleep(10000);
-        // printf("[parent] ready to fork!!!!\n");
-        // pid = fork();
-        // if (pid == -1){
-        //     printf("[ERROR] fork fault\n");
-        // } else if (pid > 0){
-        //     printf("[parent] this is parent init process\n");
-        //     pid_t child_pid = waitpid(pid, &status, 0);
-        //     if (child_pid < 0){
-        //         printf("[ERROR] waitpid fault with return %n\n", child_pid);
-        //     }else{
-        //         printf("[parent] wait pid %d status %d\n", child_pid, status);
-        //     }
-        // } else { // pid = 0
-        //     pid = getpid();
-        //     printf("[child] this is child process\n");
-        //     printf("[child] pid %d, sleep 1s\n", pid);
-        //     printf("time: %d\n", time());
-        //     sleep(1000);
-        //     printf("time: %d\n", time());
-        //     printf("[child] pid %d, exit(0)\n", pid);
-        //     exit(0);
-        // }
     }
 }
 
@@ -107,7 +84,7 @@ void init_uthread(void){
 void init_kthread(void){
     char str[11] = {0};
     // printk("trying to read from keyboard\n");
-    // keyboard_read(str, 1);
+    // keyboard_read(NULL, str, 1);
     // printk("read %d: %s\n", 1, str);
 
     char* p = kmalloc(0x20);

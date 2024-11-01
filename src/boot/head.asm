@@ -25,6 +25,7 @@ header_start:
 header_end:
 
 extern kernel_init
+extern device_init
 extern console_init
 extern temp_gdt_init
 extern gdt_init
@@ -71,6 +72,8 @@ _gdt_refresh_temp:
     lgdt [gdt_ptr]
     jmp dword code_selector:_gdt_refresh ; jmp刷新gdt并跳转到高地址
 _gdt_refresh:
+
+    call device_init
 
     call console_init
 
