@@ -1,8 +1,8 @@
 #ifndef LIGHTOS_DEVICE_H
 
-#include <sys/types.h>
 #include <lib/list.h>
 #include <lightos/task.h>
+#include <sys/types.h>
 
 #define NAMELEN 16
 
@@ -23,6 +23,9 @@ enum device_subtype_t {
 #define REQUEST_READ 0   // 块设备读
 #define REQUEST_WRITE 1  // 块设备写
 
+#define DIRECT_UP 0    // 电梯算法上楼
+#define DIRECT_DOWN 1  // 电梯算法下楼
+
 // 设备控制命令
 enum device_cmd_t {
     DEV_CMD_SECTOR_START = 1,  // 获得设备扇区开始位置 lba
@@ -31,14 +34,14 @@ enum device_cmd_t {
 };
 
 typedef struct request_t {
-    dev_t dev;            // 设备号
-    u32 type;             // 请求类型
-    u32 idx;              // 扇区位置
-    u32 count;            // 扇区数量
-    int flags;            // 特殊标志
-    u8* buf;              // 缓冲区
-    task_t* task;  // 请求进程
-    list_node_t node;     // 列表节点
+    dev_t dev;         // 设备号
+    u32 type;          // 请求类型
+    u32 idx;           // 扇区位置
+    u32 count;         // 扇区数量
+    int flags;         // 特殊标志
+    u8* buf;           // 缓冲区
+    task_t* task;      // 请求进程
+    list_node_t node;  // 列表节点
 } request_t;
 
 typedef struct device_t {
@@ -49,6 +52,7 @@ typedef struct device_t {
     dev_t parent;         // 父设备号
     void* ptr;            // 设备指针
     list_t request_list;  // 块设备请求链表
+    bool direct;          // 磁盘寻道方向（电梯算法）
     // 设备控制
     int (*ioctl)(void* dev, int cmd, void* args, int flags);
     // 读设备

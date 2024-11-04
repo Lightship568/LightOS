@@ -8,6 +8,7 @@
 #include <lightos/memory.h>
 #include <lightos/device.h>
 #include <sys/assert.h>
+#include <lib/string.h>
 
 u32 nr_syscall = NR_SYSCALL;
 handler_t syscall_table[NR_SYSCALL];
@@ -39,7 +40,15 @@ void sys_test(){
 
     memset(buf, get_current()->pid, 512);
 
-    device_request(device->dev, buf, 1, get_current()->pid, 0, REQUEST_WRITE);
+    pid_t pid =  get_current()->pid;
+
+    if (pid==2){
+        pid = 4;
+    }else if (pid == 4){
+        pid = 2;
+    }
+
+    device_request(device->dev, buf, 1, pid, 0, REQUEST_WRITE);
     
     free_kpage((u32)buf, 1);
 

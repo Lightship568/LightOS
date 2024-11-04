@@ -102,6 +102,7 @@ void device_init() {
         device->ioctl = NULL;
         device->read = NULL;
         device->write = NULL;
+        device->direct = DIRECT_UP;
         list_init(&device->request_list);
     }
 }
@@ -119,6 +120,35 @@ static void do_request(request_t* req){
         break;
     }
 }
+
+// 电梯算法获得下一个请求（上楼对应 idx 增大）
+static request_t* request_nextreq(device_t* device, request_t* request){
+    list_t* list = &device->request_list;
+    list_node_t* node = &request->node;
+    list_node_t* next = NULL;
+
+    if (device->direct == DIRECT_UP){
+        if (node->next == &list->tail){
+            device->direct = DIRECT_DOWN;
+        }
+    }else{
+        if (node->prev == &list->head){
+            device->direct = DIRECT_UP;
+        }
+    }
+
+    if (device->direct == DIRECT_UP){
+        next = node->next;
+    }else{
+        next = node->prev;
+    }
+
+    if (next == &list->head || next == &list->tail){
+        return NULL;
+    }
+    
+    return element_entry(request_t, node, next);
+} 
 
 void device_request(dev_t dev, void* buf, u8 count, idx_t idx, int flags, u32 type){
     device_t* device = device_get(dev);
@@ -140,15 +170,18 @@ void device_request(dev_t dev, void* buf, u8 count, idx_t idx, int flags, u32 ty
 
     bool empty = list_empty(&device->request_list);
 
-    // 将请求压入对应设备的请求链表
-    list_push(&device->request_list, &req->node);
+    // 电梯算法前的插入排序
+    list_insert_sort(&device->request_list, &req->node, element_node_offset(request_t, node, idx));
 
     // 若有请求正在等待处理，则阻塞自己
     if (!empty){
         task_block(req->task, NULL, TASK_BLOCKED);
+        // 被唤醒一定是因为前一个 do_request 结束
     }
 
     do_request(req);
+
+    request_t* nextreq = request_nextreq(device, req);
 
     list_remove(&req->node);
 
@@ -156,10 +189,8 @@ void device_request(dev_t dev, void* buf, u8 count, idx_t idx, int flags, u32 ty
     req = NULL;
 
     // 暂时 FIFO，恢复下一个 request 的任务
-    if (!list_empty(&device->request_list)){
-        req = element_entry(request_t, node, device->request_list.head.next);
-        assert(req->task->magic == LIGHTOS_MAGIC);
-        task_intr_unblock_no_waiting_list(req->task);
+    if (nextreq){
+        assert(nextreq->task->magic == LIGHTOS_MAGIC);
+        task_intr_unblock_no_waiting_list(nextreq->task);
     }
-
 }

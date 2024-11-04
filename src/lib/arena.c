@@ -5,6 +5,7 @@
 #include <lib/debug.h>
 #include <lib/print.h>
 #include <lib/mutex.h>
+#include <lib/string.h>
 
 /**
  * 内核用 kmalloc 与 kfree
@@ -87,6 +88,8 @@ refind:
         parena->length = size;
         list_push(&free_list, &parena_divided->list);
     }
+
+    memset(parena->buf, 0, size);
 
     mutex_unlock(&arena_lock);
 

@@ -353,16 +353,8 @@ void sys_sleep(u32 ms) {
     current->ticks = ms / jiffy;
     current->jiffies = current->jiffies + current->ticks;
 
-    // 基于ticks的插入排序
-    for (list_node_t* p = sleep_list.head.next; p != &sleep_list.tail;
-         p = p->next) {
-        target_task = element_entry(task_t, node, p);
-        if (current->jiffies < target_task->jiffies) {
-            anchor = p;
-            break;
-        }
-    }
-    list_insert_before(anchor, current_p);
+    // 基于 jiffies 的插入排序
+    list_insert_sort(&sleep_list, current_p, element_node_offset(task_t, node, jiffies));
 
     current->state = TASK_SLEEPING;
     schedule();

@@ -54,8 +54,8 @@ bool list_empty(list_t *list);
 
 // 获得链表长度
 u32 list_size(list_t *list);
-
-// 链表插入排序
+ 
+// 链表插入排序，增序，offset 是 element_node_offset，也就是 key 在结构体中相对于 node 的偏移
 void list_insert_sort(list_t *list, list_node_t *node, int offset);
 
 #endif

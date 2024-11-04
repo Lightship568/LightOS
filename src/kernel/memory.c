@@ -7,6 +7,10 @@
 #include <sys/assert.h>
 #include <sys/types.h>
 
+// 关闭 memory 的内核注释
+// #define LOGK(fmt, args...) DEBUGK(fmt, args...)
+#define LOGK(fmt, args...) ;
+
 #define ZONE_VALID 1     // ards 可用区域
 #define ZONE_RESERVED 2  // ards 不可用区域
 
@@ -56,7 +60,7 @@ void memory_init(u32 magic, u32 addr) {
     multi_tag_mmap_t* mtag;
     multi_mmap_entry_t* entry;
 
-    DEBUGK("memory_init...\n");
+    LOGK("memory_init...\n");
 
     // 引导来源
     if (magic == LIGHTOS_MAGIC) {
@@ -65,7 +69,7 @@ void memory_init(u32 magic, u32 addr) {
         ptr = (ards_t*)(addr + 4);
 
         for (size_t i = 0; i < count; ++i, ++ptr) {
-            DEBUGK("Memory base 0x%p size 0x%x type %d\n", (u32)ptr->base,
+            LOGK("Memory base 0x%p size 0x%x type %d\n", (u32)ptr->base,
                    (u32)ptr->size, (u32)ptr->type);
             if (ptr->type == ZONE_VALID && ptr->size > memory_size) {
                 memory_base = (u32)ptr->base;
@@ -77,7 +81,7 @@ void memory_init(u32 magic, u32 addr) {
         // grub 启动
         size_mbi = *(unsigned int*)addr;
         tag = (multi_tag_t*)(addr + 8);
-        DEBUGK("Announced multiboot infomation size 0x%x\n", size_mbi);
+        LOGK("Announced multiboot infomation size 0x%x\n", size_mbi);
         while (tag->type != MULTIBOOT_TAG_TYPE_END) {
             if (tag->type == MULTIBOOT_TAG_TYPE_MMAP) {
                 break;
@@ -88,7 +92,7 @@ void memory_init(u32 magic, u32 addr) {
         mtag = (multi_tag_mmap_t*)tag;
         entry = mtag->entries;
         while ((u32)entry < (u32)tag + tag->size) {
-            DEBUGK("Memory base 0x%p, size 0x%p, type %d\n", (u32)entry->addr, (u32)entry->len, (u32)entry->type);
+            LOGK("Memory base 0x%p, size 0x%p, type %d\n", (u32)entry->addr, (u32)entry->len, (u32)entry->type);
             count++;
             if (entry->type == ZONE_VALID && entry->len > memory_size){
                 memory_base = (u32)entry->addr;
@@ -101,9 +105,9 @@ void memory_init(u32 magic, u32 addr) {
         panic("Memory init magic unknown 0x%p\n", magic);
     }
 
-    DEBUGK("ARDS count %d\n", count);
-    DEBUGK("Memory base 0x%p\n", (u32)memory_base);
-    DEBUGK("Memory size 0x%p\n", (u32)memory_size);
+    LOGK("ARDS count %d\n", count);
+    LOGK("Memory base 0x%p\n", (u32)memory_base);
+    LOGK("Memory size 0x%p\n", (u32)memory_size);
 
     if (memory_size + memory_base < KERNEL_MEM_SIZE) {
         panic("Memory too small, at least %dM needed for kernel!\n",
@@ -116,8 +120,8 @@ void memory_init(u32 magic, u32 addr) {
     total_pages = IDX(memory_size) + IDX(MEMORY_BASE);
     free_pages = IDX(memory_size);
 
-    DEBUGK("Total pages %d\n", total_pages);
-    DEBUGK("Free pages %d\n", free_pages);
+    LOGK("Total pages %d\n", total_pages);
+    LOGK("Free pages %d\n", free_pages);
 
 }
 
@@ -131,7 +135,7 @@ void memory_map_init(void) {
 
     mem_map_pages = div_round_up(total_pages, PAGE_SIZE);
     free_pages -= mem_map_pages;
-    DEBUGK("Memory map page count %d\n", mem_map_pages);
+    LOGK("Memory map page count %d\n", mem_map_pages);
 
     // 清空物理内存数组
     memset((void*)mem_map, 0, mem_map_pages * PAGE_SIZE);
@@ -141,7 +145,7 @@ void memory_map_init(void) {
     for (size_t i = 0; i < start_page_idx; ++i) {
         mem_map[i] = USED;
     }
-    DEBUGK("Total pages %d free pages %d\n", total_pages, free_pages);
+    LOGK("Total pages %d free pages %d\n", total_pages, free_pages);
 
     // 初始化内核虚拟内存位图，需要 8 bits 对齐
     // 这里需要跳过mmap，但是为了管理方便，选择了将mmap的bitmap置1了
@@ -276,7 +280,7 @@ static void _reset_kpage(bitmap_t* map, u32 vaddr, u32 count) {
 u32 alloc_kpage(u32 count) {
     assert(count > 0);
     u32 vaddr = _alloc_kpage(&kernel_map, count);
-    DEBUGK("Alloc kernel pages 0x%p count %d\n", vaddr, count);
+    LOGK("Alloc kernel pages 0x%p count %d\n", vaddr, count);
     return vaddr;
 }
 
@@ -285,7 +289,7 @@ void free_kpage(u32 vaddr, u32 count) {
     ASSERT_PAGE(vaddr);
     assert(count > 0);
     _reset_kpage(&kernel_map, vaddr, count);
-    DEBUGK("Free kernel pages 0x%p count %d\n", vaddr, count);
+    LOGK("Free kernel pages 0x%p count %d\n", vaddr, count);
 }
 
 // 获取一页用户内存（phy 8M+），返回物理地址
@@ -296,7 +300,7 @@ static u32 get_user_page() {
             free_pages--;
             assert(free_pages >= 0);
             u32 paddr = PAGE(i);
-            DEBUGK("Get free page 0x%p\n", paddr);
+            LOGK("Get free page 0x%p\n", paddr);
             return paddr;
         }
     }    
@@ -321,7 +325,7 @@ static void put_user_page(u32 paddr) {
     // 确保空闲页数量在正确范围内
     assert(free_pages > 0 && free_pages < total_pages);
 
-    DEBUGK("Put user page paddr 0x%p\n", paddr);
+    LOGK("Put user page paddr 0x%p\n", paddr);
 }
 /****************************************************************************************************************
  * 页表操作
@@ -473,7 +477,7 @@ void kmap_init(void){
     entry_init(pde_entry, IDX(LOW_MEM_VADDR_TO_PADDR(kmap_pte)));
     // 同时清空kmap_pool
     memset(kmap_pool, 0, sizeof(kmap_mapping) * KMAP_POOL_LEN);
-    DEBUGK("Kmap initialized\n");
+    LOGK("Kmap initialized\n");
 }
 
 // 映射8M以上高物理内存进内核虚拟地址访问
@@ -505,12 +509,12 @@ u32 kmap(u32 paddr){
     entry_init(&kmap_pte[i], IDX(paddr));
     flush_tlb(vaddr);
 
-    DEBUGK("kmap paddr 0x%x at vaddr 0x%x\n", paddr, vaddr);
+    LOGK("kmap paddr 0x%x at vaddr 0x%x\n", paddr, vaddr);
     return vaddr;
 }
 
 u32 kunmap(u32 vaddr){
-    DEBUGK("kunmap vaddr 0x%x\n", vaddr);
+    LOGK("kunmap vaddr 0x%x\n", vaddr);
     // 保证是kmap分配的虚拟地址范围
     assert(vaddr >= kmap_start_vaddr && vaddr < kmap_start_vaddr + KMAP_POOL_LEN * PAGE_SIZE);
     ASSERT_PAGE(vaddr);
@@ -541,7 +545,7 @@ static page_entry_t* get_pte(u32 vaddr){
         entry_init(entry, IDX(paddr_page)); //pde[idx]=paddr_page
         kvaddr = kmap(paddr_page); // 注意调用方清理kmap
         memset((void*)kvaddr, 0, PAGE_SIZE);
-        DEBUGK("Create new page table for 0x%x at pde[0x%x]\n", vaddr, idx);
+        LOGK("Create new page table for 0x%x at pde[0x%x]\n", vaddr, idx);
     } else {
         paddr_page = PAGE(entry->index);
         kvaddr = kmap(paddr_page); // 注意调用方清理kmap
@@ -577,7 +581,7 @@ void link_user_page(u32 vaddr){
     entry_init(entry, IDX(paddr_page));
     flush_tlb(vaddr);
 
-    DEBUGK("Link new user page for 0x%x at 0x%x\n", vaddr, paddr_page);
+    LOGK("Link new user page for 0x%x at 0x%x\n", vaddr, paddr_page);
 
     kunmap(GET_PAGE(entry)); //清理get_pte的kmap
 
@@ -610,7 +614,7 @@ void unlink_user_page(u32 vaddr){
     
     kunmap(GET_PAGE(entry)); //清理get_pte的kmap
 
-    DEBUGK("Unlink user page for 0x%x at paddr 0x%x\n", vaddr, PAGE(entry->index));
+    LOGK("Unlink user page for 0x%x at paddr 0x%x\n", vaddr, PAGE(entry->index));
 }
 
 typedef struct page_error_code_t {
@@ -633,7 +637,7 @@ void page_fault(int vector, u32 edi, u32 esi, u32 ebp, u32 esp, u32 ebx, u32 edx
     u32 faulting_address;
     task_t* task;
     asm volatile("movl %%cr2, %0\n" : "=r"(faulting_address));
-    DEBUGK("PF at vaddress 0x%x\n", faulting_address);
+    LOGK("PF at vaddress 0x%x\n", faulting_address);
 
     task = get_current();
     // 一定是用户态才能进入 PF，如果是内核PF，理应panic
@@ -659,7 +663,7 @@ void page_fault(int vector, u32 edi, u32 esi, u32 ebp, u32 esp, u32 ebx, u32 edx
         if (mem_map[pte_entry->index] == 1){
             // fork的另一个进程已经PF并复制过了
             pte_entry->write = true;
-            DEBUGK("CoW: Already copy at 0x%x\n", faulting_address);
+            LOGK("CoW: Already copy at 0x%x\n", faulting_address);
         } else {
             assert(mem_map[pte_entry->index]==2);
             mem_map[pte_entry->index]--;
@@ -670,7 +674,7 @@ void page_fault(int vector, u32 edi, u32 esi, u32 ebp, u32 esp, u32 ebx, u32 edx
             memcpy((void*)page_new_vaddr, (void*)page_old_vaddr, PAGE_SIZE); // 复制内存页
             entry_init(pte_entry, IDX(paddr_page));
             flush_tlb(faulting_address);
-            DEBUGK("CoW: Copy on Write at 0x%x\n", faulting_address);
+            LOGK("CoW: Copy on Write at 0x%x\n", faulting_address);
         }
 
         kunmap(GET_PAGE(pte_entry)); // 清理 get_pte 的 kmap
@@ -711,7 +715,7 @@ int32 sys_brk(void* addr){
 
     // brk 与栈重叠
     if (brk >= USER_STACK_BOTTOM){
-        DEBUGK("brk >= USER_STACK_BOTTOM\n");
+        LOGK("brk >= USER_STACK_BOTTOM\n");
         return -1;
     }
 
@@ -720,7 +724,7 @@ int32 sys_brk(void* addr){
             unlink_user_page(page);
         }
     } else if ((brk - task->brk) > PAGE(free_pages)){ // 内存不够
-        DEBUGK("brk out of memory\n");
+        LOGK("brk out of memory\n");
         return -1;
     }
     // else 增加brk

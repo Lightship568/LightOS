@@ -77,8 +77,9 @@ void init_uthread(void){
     int status;
     fork();
     fork();
+    printf("pid %d writing...\n", getpid());
     test();
-    printf("pid %d finished\n", getpid());
+    printf("pid %d finished!\n", getpid());
     while (true){
         sleep(1000);
     }
