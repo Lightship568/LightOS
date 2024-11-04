@@ -102,7 +102,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/lib/printf.o		\
 	$(BUILD)/lib/arena.o		\
 	$(BUILD)/kernel/ide.o		\
-	$(BUILD)/kernel/device.o	\
+	$(BUILD)/kernel/device.o	
 
 	$(shell mkdir -p $(dir $@))
 	ld ${LDFLAGS} $^ -o $@

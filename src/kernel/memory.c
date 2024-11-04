@@ -178,8 +178,6 @@ static void entry_init(page_entry_t* entry, u32 index) {
 // 初始化内存映射，也就是完成最初的页表映射，实现内核物理地址=线性地址
 void mapping_init(void) {
     /**
-     * 注意，这里只初始化了一个PD和两个PT，一个PT可以映射1024*4K也就是4M的内存。
-     * 所以当前映射了 8M 给内核。
      * 
      * PD永远都是1个，这是根据分页的地址分割决定的，10/10/12的分割刚好让一个页的PD可以覆盖10位的索引。
      * 64位也一样，四级分页9/9/9/9/12（48bits），加载到cr3的PD永远只有一个页，不存在跨页的情况。
@@ -292,7 +290,7 @@ void free_kpage(u32 vaddr, u32 count) {
     LOGK("Free kernel pages 0x%p count %d\n", vaddr, count);
 }
 
-// 获取一页用户内存（phy 8M+），返回物理地址
+// 获取一页用户内存（phy 16M+），返回物理地址
 static u32 get_user_page() {
     for (size_t i = IDX(KERNEL_MEM_SIZE); i < total_pages; ++i) {
         if (!mem_map[i]) {  // 该物理页未被占用
@@ -361,13 +359,13 @@ void copy_pte(task_t* target_task){
     target_pde_entry = (page_entry_t*)(target_task->pde + KERNEL_VADDR_OFFSET);
 
     size_t i = 0;
-    // 用户页表PT拷贝（phy > 8M）
+    // 用户页表PT拷贝（phy > 16M）
     for (; i < PDE_IDX(KERNEL_VADDR_OFFSET); ++i, current_pde_entry++, target_pde_entry++){ //0-0x300
         if (!current_pde_entry->present) continue;
         target_pte_paddr = get_user_page();
         // PDE需要更新到新PT
         entry_init(target_pde_entry, IDX(target_pte_paddr));
-        // >8M kmap 进内核
+        // >16M kmap 进内核
         current_pte = (page_entry_t*)kmap(PAGE(current_pde_entry->index));
         target_pte = (page_entry_t*)kmap(target_pte_paddr);
         // 设置 CoW
@@ -412,7 +410,7 @@ void free_pte(task_t* target_task){
     pde_entry = (page_entry_t*)(target_task->pde + KERNEL_VADDR_OFFSET);
 
     size_t i = 0;
-    // 用户页表释放（phy > 8M）
+    // 用户页表释放（phy > 16M）
     for (; i < PDE_IDX(KERNEL_VADDR_OFFSET); ++i, pde_entry++){ //0-0x300
         if (!pde_entry->present) continue;
         pte_paddr = PAGE(pde_entry->index);
@@ -461,14 +459,15 @@ typedef struct kmap_mapping{
 
 static kmap_mapping kmap_pool[KMAP_POOL_LEN]; // 用1024*8（2页）来存储
 static page_entry_t* kmap_pte;
-static u32 kmap_start_vaddr; //kmap映射的起始虚拟地址，当前是3G+8M
+static u32 kmap_start_vaddr; //kmap映射的起始虚拟地址，当前是3G+16M
 
 #define KMAP_GET_VADDR(index) ((u32)(kmap_start_vaddr + PAGE(index)))
 #define KMAP_GET_INDEX(vaddr) (PTE_IDX((u32)vaddr - kmap_start_vaddr))
 
 void kmap_init(void){
     kmap_start_vaddr = LOW_MEM_PADDR_TO_VADDR(KERNEL_MEM_SIZE);
-    // 8M+3G偏移，是当前的pde[0x300 + 2]的位置，即当前内核pde的顺延位。
+    // 16M+3G偏移，是当前的pde[0x300 + 4]的位置，即紧邻当前内核的虚拟空间。
+    // 物理上内核16M后紧接着用户空间，虚拟上内核后面是kmap的用户态空间。
     page_entry_t* pde_entry = &(get_pde())[PDE_IDX(kmap_start_vaddr)];
     // 分配一个页的pte专门用来映射kmap
     kmap_pte = (page_entry_t*)alloc_kpage(1);
@@ -480,7 +479,7 @@ void kmap_init(void){
     LOGK("Kmap initialized\n");
 }
 
-// 映射8M以上高物理内存进内核虚拟地址访问
+// 映射16M以上高物理内存进内核虚拟地址访问
 u32 kmap(u32 paddr){
     assert(paddr >= KERNEL_MEM_SIZE);
     ASSERT_PAGE(paddr);    

@@ -15,9 +15,9 @@
 #define KERNEL_PAGE_DIR_VADDR 0xC0000000            // 虚拟地址位置
 #define KERNEL_VADDR_OFFSET KERNEL_PAGE_DIR_VADDR   // 内核虚拟地址偏移
 #define KERNEL_PAGE_TABLE (PAGE_SIZE)   // 页表PT起始（内存布局：[PD]-[PT]-[PT]...-[kernel_map]）
-#define KERNEL_PAGE_TABLE_COUNT 2       // 页表页数量，2 页映射 8M 给内核
-#define KERNEL_MEM_SIZE (PAGE_SIZE * (PAGE_SIZE / 4) * KERNEL_PAGE_TABLE_COUNT)                     // 内核内存大小 8M
-#define KERNEL_MAP_BITS_VADDR (KERNEL_PAGE_DIR_VADDR + PAGE_SIZE * (KERNEL_PAGE_TABLE_COUNT + 1))   // 内核虚拟内存位图的起始位置，紧接着两个页表的布局。
+#define KERNEL_PAGE_TABLE_COUNT 4       // 页表页数量，4 页映射 16M 给内核
+#define KERNEL_MEM_SIZE (PAGE_SIZE * (PAGE_SIZE / 4) * KERNEL_PAGE_TABLE_COUNT)                     // 内核内存大小 16M
+#define KERNEL_MAP_BITS_VADDR (KERNEL_PAGE_DIR_VADDR + PAGE_SIZE * (KERNEL_PAGE_TABLE_COUNT + 1))   // 内核虚拟内存位图的起始位置，紧接着4个页表的布局。
 
 // 用户栈顶地址 128M（受限于一页的vmap->buf限制）
 #define USER_STACK_TOP (0x8000000 - 1)
