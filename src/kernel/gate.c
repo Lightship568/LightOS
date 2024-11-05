@@ -39,9 +39,9 @@ void sys_test(){
     assert(device);
 
     cache_t* pcache = bread(device->dev, 0); // 主引导块
-    char* data = pcache->data;
-    memset(data, 0x5a, BLOCK_SIZE);
-    pcache->dirty = true;
+    // char* data = pcache->data;
+    // memset(data, 0x5a, BLOCK_SIZE);
+    // pcache->dirty = true;
     brelse(pcache);
 
 }
