@@ -131,7 +131,7 @@ static u32 mem_map_pages;       // 物理内存数组占用的页数
 
 // mmap 物理内存数组初始化，顺便占用（1M+mmap占用）的物理地址
 void memory_map_init(void) {
-    mem_map = (u8*)memory_base + KERNEL_PAGE_DIR_VADDR; // 增加虚拟地址偏移。
+    mem_map = (u8*)memory_base + KERNEL_VADDR_OFFSET; // 增加虚拟地址偏移。
 
     mem_map_pages = div_round_up(total_pages, PAGE_SIZE);
     free_pages -= mem_map_pages;

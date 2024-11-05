@@ -121,7 +121,7 @@ void task_writer() {
         rwlock_write_unlock(&rwlock_test);
     }
 }
-void idle() {
+void idle(void) {
     // 写入进程0的栈信息（切栈）
     asm volatile(
         "mov %0, %%esp\n"                               // 恢复 esp

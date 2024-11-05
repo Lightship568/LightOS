@@ -11,8 +11,8 @@
 // 链表结点
 typedef struct list_node_t
 {
-    struct list_node_t *prev; // 下一个结点
-    struct list_node_t *next; // 前一个结点
+    struct list_node_t *prev; // 前一个结点
+    struct list_node_t *next; // 下一个结点
 } list_node_t;
 
 // 链表

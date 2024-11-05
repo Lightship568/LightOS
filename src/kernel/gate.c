@@ -9,6 +9,7 @@
 #include <lightos/device.h>
 #include <sys/assert.h>
 #include <lib/string.h>
+#include <lightos/cache.h>
 
 u32 nr_syscall = NR_SYSCALL;
 handler_t syscall_table[NR_SYSCALL];
@@ -34,23 +35,14 @@ void sys_test(){
     char ch;
     device_t* device;
 
-    void* buf = (void*)alloc_kpage(1);
-    device = device_find(DEV_IDE_PART, 0);
+    device = device_find(DEV_IDE_DISK, 0);
     assert(device);
 
-    memset(buf, get_current()->pid, 512);
-
-    pid_t pid =  get_current()->pid;
-
-    if (pid==2){
-        pid = 4;
-    }else if (pid == 4){
-        pid = 2;
-    }
-
-    device_request(device->dev, buf, 1, pid, 0, REQUEST_WRITE);
-    
-    free_kpage((u32)buf, 1);
+    cache_t* pcache = bread(device->dev, 0); // 主引导块
+    char* data = pcache->data;
+    memset(data, 0x5a, BLOCK_SIZE);
+    pcache->dirty = true;
+    brelse(pcache);
 
 }
 

@@ -2079,3 +2079,91 @@ loop14       7:14   0  15.8M  0 loop
 0xC1400000 未使用
 ```
 
+## 数据结构
+
+文件系统缓冲（PAGE CACHE）采用哈希表实现键值对存取。
+
+> ### 哈希表 vs 二叉树
+>
+> **哈希表**：
+>
+> - **查找、插入和删除的平均时间复杂度**为 O(1)，但最坏情况下可能为 O(n)（哈希冲突处理不当）。
+> - 适合快速查找，不适合范围查询（如查找某个范围内的键）。
+> - 需要额外的内存来存储哈希桶。
+>
+> **二叉树（如红黑树或AVL树）**：
+>
+> - **查找、插入和删除的时间复杂度**为 O(log⁡n)。
+> - 更适合需要排序或范围查询的情况。
+> - 内存使用相对高效，因为不需要存储额外的哈希结构。
+>
+> ### 取舍考虑
+>
+> - 如果需要频繁的查找和范围查询，且数据量不大，使用自平衡二叉树（如红黑树或AVL树）更合适。
+> - 如果需要快速的插入和查找，且对顺序无特殊要求，哈希表是更优的选择。
+> - 在性能要求高且数据量较大的情况下，需要根据具体场景进行综合评估，包括数据特性、操作频率等因素。
+
+哈希表的装载因子用于扩容：
+
+> **装载因子（Load Factor）** 是指哈希表中已存储元素的数量与哈希表总容量（即桶的数量）的比值。通常表示为：
+>
+> Load Factor=Number of ElementsNumber of Buckets\text{Load Factor} = \frac{\text{Number of Elements}}{\text{Number of Buckets}}Load Factor=Number of BucketsNumber of Elements
+>
+> #### 作用
+>
+> - **性能**：装载因子影响哈希表的性能。较低的装载因子意味着较少的哈希冲突，查找、插入和删除操作的平均时间复杂度更接近 O(1)O(1)O(1)。
+> - **扩容**：当装载因子超过某个阈值（通常为0.7或0.75），哈希表可能会进行扩容，以保持良好的性能。扩容涉及创建一个更大的桶数组，并重新哈希所有现有元素。
+
+## 总结
+
+Onix 实现的叫做 buffer，大小是两个扇区，没有使用页。这里我是用页缓存，叫做page_cache。但是理论上page_cache是与文件绑定的，因此是文件系统的缓存功能，实际上linux还有一个叫做buffer cache的专门用来缓存块设备的元数据，我感觉这里实现的确实是这个东西，但是也叫做cache了，并且仍然用页大小来做缓冲，后面如果有元数据的需要，再改小。
+
+* **页缓存**是以文件为单位，缓存文件页，主要用于文件系统。
+* **缓冲区缓存**是以磁盘块为单位，主要用于缓存块设备的元数据（如超级块和 inode 表）。
+
+这个缓存的逻辑还是比较乱的，这里重新梳理下。
+
+* 在物理内存中，8M-12M的空间作为缓存的ptr+data使用。其中，前面的部分是cache数据结构的ptr数组，后面的部分是data buffer，二者相对生长，直到用完所有4M空间。数据结构如下，cache ptr中的data指针指向data buffer：
+
+  ```c
+  typedef struct cache_t {
+      char* data;         // 数据区
+      dev_t dev;          // 设备号
+      idx_t block;        // 块号
+      int count;          // 引用计数
+      list_node_t hnode;  // hash_table 哈希表拉链节点
+      list_node_t rnode;  // free_list 空闲缓冲节点
+      mutex_t lock;       // 锁
+      bool dirty;         // 脏位
+      bool valid;         // 是否有效
+  } cache_t;
+  ```
+
+* 为了可以通过设备号dev和写入区块block快速定位到目标的cache，需要使用哈希表。为了解决哈希冲突问题，干脆将哈希表设置为 list_t 的大数组，这样可以将冲突的node直接加入这个链表。将dev和block的哈希值作为key，哈希表的list_t作为value、将目标pcache->hnode加入到hash_table[hash_value]中。这样通过dev和block就能拿到目标所在的链表，之后遍历链表比较dev和block就能找到对应的cache了。
+
+* 四个关键功能函数，分别是：得到缓存，读缓存，写缓存，释放缓存。其中，写缓存会检查pcache->dirty脏位置位才会写入。
+
+  ```c
+  cache_t* getblk(dev_t dev, idx_t block);
+  cache_t* bread(dev_t dev, idx_t block);
+  void bwrite(cache_t* cache);
+  void brelse(cache_t* cache);
+  ```
+
+* 若4M的缓冲区全部用光，此时如果申请新的缓存，就要从已经释放的缓存中寻找，因此存在一个free_list专门保存已经释放了的缓冲，链接pcache->rnode。若连被释放的缓冲都没有，那么此时缓冲读写只能被阻塞了，等到其他缓冲的释放后才能继续被执行，因此存在一个wait_list保存等待进程。
+
+* 综上所述，一次缓冲读的流程如下：
+
+  1. 上层调用bread，bread调用getblk，首先尝试查找从哈希表直接查找并返回cache，并删除其，若不存在，则尝试从4M空间分配一个新的cache，若4M也用光了，则尝试从free_list找到最早被释放的缓冲来使用，若free_list为空，则阻塞到wait_list等待其他缓冲区释放。
+  2. 从4M空间新得到或从free_list得到cache后，需要将其加入哈希表。其中，如果是从free_list中获得的cache，需要先取消先前cache在哈希表中的映射，再重新映射新的dev和block。
+  3. 若当前cache是新的（valid无效），则需要进行一次读操作。根据cache中的dev和buf等信息，就可以使用device_request来向设备发送读请求了。
+  4. 但若是已经缓存好的（valid有效），则不需要实际从设备中读取，而是直接返回缓冲区，同时增加引用计数（这样上层对缓冲区是共享且内存同步的）。
+
+* 一次缓冲释放的流程如下：
+
+  1. 上层调用brelse后，释放引用计数，若归零则将cache的rnode加入free_list。
+  2. 若脏位置位，则调用bwrite写入磁盘。（启用强一致，即缓存释放时立即写入，不存在延迟写入）
+  3. 唤醒一个等待cache的进程。
+
+
+
