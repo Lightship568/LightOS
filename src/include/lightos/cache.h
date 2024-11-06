@@ -7,7 +7,7 @@
 
 // 此处 SECTOR_SIZE 不应引用 IDE 设备，应做上层抽象来解耦合
 #define SECTOR_SIZE 512
-#define BLOCK_SIZE PAGE_SIZE
+#define BLOCK_SIZE SECTOR_SIZE * 2 // minix v1，块大小为1K
 #define BLOCK_SECS (BLOCK_SIZE / SECTOR_SIZE)
 
 typedef struct cache_t {
