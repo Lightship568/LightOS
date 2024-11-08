@@ -6,6 +6,7 @@
 #include <lib/debug.h>
 #include <lib/print.h>
 #include <lib/stdlib.h>
+#include <lightos/cache.h>
 #include <lightos/console.h>
 #include <lightos/ide.h>
 #include <lightos/interrupt.h>
@@ -17,13 +18,13 @@
 #include <sys/assert.h>
 #include <sys/global.h>
 #include <sys/types.h>
-#include <lightos/cache.h>
 
-extern void clock_init(void);        // clock.c 无 .h
+extern void clock_init(void);    // clock.c 无 .h
 extern void syscall_init(void);  // gate.c
 extern void schedule(void);
 extern void tss_init(void);
 extern void idle(void);
+extern void super_init(void);
 
 void kernel_init(void) {
     tss_init();  // 初始化 GDT[3] TSS
@@ -42,6 +43,8 @@ void kernel_init(void) {
 
     ide_init();         // 硬盘驱动初始化
     page_cache_init();  // 缓冲初始化
+
+    super_init(); // 文件系统超级块初始化
 
     idle();  // set stack & sti
 }

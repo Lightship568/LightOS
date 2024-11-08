@@ -56,6 +56,11 @@ $(BUILD)/lib/%.o: $(SRC)/lib/%.c
 	$(shell mkdir -p $(dir $@))
 	gcc $(CFLAGS) $(DEBUG) $(INCLUDE) -c $< -o $@
 
+# fs (*.c)
+$(BUILD)/fs/%.o: $(SRC)/fs/%.c
+	$(shell mkdir -p $(dir $@))
+	gcc $(CFLAGS) $(DEBUG) $(INCLUDE) -c $< -o $@
+
 # lib (*.asm)
 $(BUILD)/lib/%.o: $(SRC)/lib/%.asm
 	$(shell mkdir -p $(dir $@))
@@ -103,7 +108,9 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/lib/arena.o		\
 	$(BUILD)/kernel/ide.o		\
 	$(BUILD)/kernel/device.o	\
-	$(BUILD)/kernel/cache.o	\
+	$(BUILD)/kernel/cache.o		\
+	$(BUILD)/fs/super.o 		\
+
 
 	$(shell mkdir -p $(dir $@))
 	ld ${LDFLAGS} $^ -o $@

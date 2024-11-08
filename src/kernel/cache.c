@@ -3,6 +3,9 @@
 #include <lib/debug.h>
 #include <sys/assert.h>
 
+// #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
+#define LOGK(fmt, args...) ;
+
 #define HASH_COUNT 101  // 素数
 
 static cache_t* cache_start = (cache_t*)KERNEL_PAGE_CACHE_VADDR; // 缓存开始位置的虚拟地址（3G+8M）
@@ -78,7 +81,7 @@ static cache_t* get_new_cache(){
         cache_count++;
         cache_ptr++;
         cache_data -= BLOCK_SIZE;
-        DEBUGK("Cache count %d\n", cache_count);
+        LOGK("Cache count %d\n", cache_count);
     }
     return pcache;
 }

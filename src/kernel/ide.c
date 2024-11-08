@@ -11,6 +11,9 @@
 #include <lightos/task.h>
 #include <sys/assert.h>
 
+// #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
+#define LOGK(fmt, args...) ;
+
 #define EOK 0
 #define EIO 1
 #define ETIME 2
@@ -172,7 +175,7 @@ static void ide_handler(int vector) {
 
     // 读取常规状态寄存器，表示中断处理结束
     u8 state = inb(ctrl->iobase + IDE_STATUS);
-    // DEBUGK("Harddisk interrupt vector %d state 0x%x\n", vector, state);
+    // LOGK("Harddisk interrupt vector %d state 0x%x\n", vector, state);
     if (ctrl->waiter) {
         // 如果有进程阻塞，则取消阻塞
         task_intr_unblock_no_waiting_list(ctrl->waiter);
@@ -183,21 +186,21 @@ static void ide_handler(int vector) {
 static void ide_error(ide_ctrl_t* ctrl) {
     u8 error = inb(ctrl->iobase + IDE_ERR);
     if (error & IDE_ER_BBK)
-        DEBUGK("bad block\n");
+        LOGK("bad block\n");
     if (error & IDE_ER_UNC)
-        DEBUGK("uncorrectable data\n");
+        LOGK("uncorrectable data\n");
     if (error & IDE_ER_MC)
-        DEBUGK("media change\n");
+        LOGK("media change\n");
     if (error & IDE_ER_IDNF)
-        DEBUGK("id not found\n");
+        LOGK("id not found\n");
     if (error & IDE_ER_MCR)
-        DEBUGK("media change requested\n");
+        LOGK("media change requested\n");
     if (error & IDE_ER_ABRT)
-        DEBUGK("abort\n");
+        LOGK("abort\n");
     if (error & IDE_ER_TK0NF)
-        DEBUGK("track 0 not found\n");
+        LOGK("track 0 not found\n");
     if (error & IDE_ER_AMNF)
-        DEBUGK("address mark not found\n");
+        LOGK("address mark not found\n");
 }
 
 // 硬盘延迟
@@ -302,7 +305,7 @@ int ide_pio_read(ide_disk_t* disk, void* buf, u8 count, idx_t lba) {
 
     int ret = -EIO;
 
-    DEBUGK("Read lba 0x%x\n", lba);
+    LOGK("Read lba 0x%x\n", lba);
 
     // 选择磁盘
     ide_select_drive(disk);
@@ -346,7 +349,7 @@ int ide_pio_write(ide_disk_t* disk, void* buf, u8 count, idx_t lba) {
 
     int ret = EOK;
 
-    DEBUGK("Write lba 0x%x\n", lba);
+    LOGK("Write lba 0x%x\n", lba);
 
     // 选择磁盘
     ide_select_drive(disk);
@@ -412,7 +415,7 @@ static void ide_part_init(ide_disk_t* disk, u16* buf) {
     boot_sector_t* eboot;  // 扩展分区起始扇区
     part_entry_t* eentry;  // 扩展分区表项
 
-    DEBUGK("Checking Disk %s Partition Information\n", disk->name);
+    LOGK("Checking Disk %s Partition Information\n", disk->name);
 
     // 读取MBR扇区
     ide_pio_read(disk, buf, 1, 0);
@@ -421,7 +424,7 @@ static void ide_part_init(ide_disk_t* disk, u16* buf) {
 
     // 防止vmware的IDE不是MBR
     if (boot->signature != 0xaa55) {
-        DEBUGK("Disk %s isn't MBR format\n", disk->name);
+        LOGK("Disk %s isn't MBR format\n", disk->name);
         return;
     }
 
@@ -439,15 +442,15 @@ static void ide_part_init(ide_disk_t* disk, u16* buf) {
         part->system = entry->system;
         part->start = entry->start;
 
-        DEBUGK("Disk Part Info: %s\n", part->name);
-        printf("    bootable: %d\n", entry->bootable);
-        printf("    start   : %d\n", entry->start);
-        printf("    count   : %d\n", entry->count);
-        printf("    system  : 0x%x\n", entry->system);
+        LOGK("Disk Part Info: %s\n", part->name);
+        LOGK(" >> bootable: %d\n", entry->bootable);
+        LOGK(" >> start   : %d\n", entry->start);
+        LOGK(" >> count   : %d\n", entry->count);
+        LOGK(" >> system  : 0x%x\n", entry->system);
 
         // 扩展分区单独处理（暂不支持，需要扩大disk->part[N]，动态大小不是很方便）
         if (entry->system == PART_FS_EXTENDED) {
-            DEBUGK("WARN: Disk Extened Partition Unsupport\n");
+            LOGK("WARN: Disk Extened Partition Unsupport\n");
 
             eboot = (boot_sector_t*)(buf +
                                      SECTOR_SIZE);  // 使用buf后半，防止覆盖boot
@@ -458,16 +461,16 @@ static void ide_part_init(ide_disk_t* disk, u16* buf) {
                 if (!eentry->count) {
                     continue;
                 }
-                DEBUGK("Disk Extend Part Info: %s part %d extend %d\n",
+                LOGK("Disk Extend Part Info: %s part %d extend %d\n",
                        part->name, i, j);
-                printf("    bootable: %d\n", eentry->bootable);
-                printf("    start   : %d\n", eentry->start);
-                printf("    count   : %d\n", eentry->count);
-                printf("    system  : 0x%x\n", eentry->system);
+                LOGK(" >> bootable: %d\n", eentry->bootable);
+                LOGK(" >> start   : %d\n", eentry->start);
+                LOGK(" >> count   : %d\n", eentry->count);
+                LOGK(" >> system  : 0x%x\n", eentry->system);
             }
         }
     }
-    DEBUGK("Disk %s Partition Information Checked\n", disk->name);
+    LOGK("Disk %s Partition Information Checked\n", disk->name);
 }
 
 static void ide_fixstrings(char* buf, u32 len) {
@@ -480,7 +483,7 @@ static void ide_fixstrings(char* buf, u32 len) {
 }
 
 static u32 ide_identify(ide_disk_t* disk, u16* buf) {
-    DEBUGK("Identifing Disk %s\n", disk->name);
+    LOGK("Identifing Disk %s\n", disk->name);
     // IDE设备不支持热插拔，因此初始化过程无需互斥锁
     // mutex_lock(&disk->ctrl->lock);
 
@@ -496,7 +499,7 @@ static u32 ide_identify(ide_disk_t* disk, u16* buf) {
 
     u32 ret = EOF;
     if (params->total_lba == 0) {
-        DEBUGK("Disk %s does'nt exsit\n", disk->name);
+        LOGK("Disk %s does'nt exsit\n", disk->name);
         goto rollback;
     }
 
@@ -504,12 +507,12 @@ static u32 ide_identify(ide_disk_t* disk, u16* buf) {
     ide_fixstrings(params->firmware, sizeof(params->firmware));
     ide_fixstrings(params->serial, sizeof(params->serial));
 
-    DEBUGK("Find Disk %s:\n", disk->name);
+    LOGK("Find Disk %s:\n", disk->name);
 
-    printk("  > total lba        :%d\n", params->total_lba);
-    printk("  > serial number    :%s\n", params->serial);
-    printk("  > firmware version :%s\n", params->firmware);
-    printk("  > modle numberl    :%s\n", params->serial);
+    LOGK("  > total lba        :%d\n", params->total_lba);
+    LOGK("  > serial number    :%s\n", params->serial);
+    LOGK("  > firmware version :%s\n", params->firmware);
+    LOGK("  > modle numberl    :%s\n", params->serial);
 
     disk->total_lba = params->total_lba;
     disk->cylinders = params->cylinders;
@@ -593,5 +596,5 @@ void ide_init() {
 
     ide_install();  // 安装设备
 
-    DEBUGK("ide initialized...\n");
+    LOGK("ide initialized...\n");
 }
