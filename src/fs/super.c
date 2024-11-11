@@ -1,9 +1,8 @@
-#include <lightos/fs.h>
-#include <lightos/device.h>
-#include <lib/string.h>
 #include <lib/debug.h>
+#include <lib/string.h>
+#include <lightos/device.h>
+#include <lightos/fs.h>
 #include <sys/assert.h>
-
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -15,54 +14,95 @@
 #define FS_SUPER_BLOCK_NR 1
 #define FS_IMAP_BLOCK_NR 2
 
-void super_init(void){
+#define SUPER_NR 16                          // 超级块表16个
+static super_block_t super_table[SUPER_NR];  // 超级块表
+static super_block_t* root;                  // 根文件系统超级块
+
+// 从超级块表中查找出一个空闲块
+static super_block_t* get_free_super() {
+    super_block_t* sb;
+    for (size_t i = 0; i < SUPER_NR; ++i) {
+        sb = &super_table[i];
+        if (sb->dev == EOF) {
+            return sb;
+        }
+    }
+    panic("super block out of SUPER_NR %d\n", SUPER_NR);
+}
+
+// 获取设备 dev 的超级块
+super_block_t* get_super(dev_t dev) {
+    super_block_t* sb = NULL;
+    for (size_t i = 0; i < SUPER_NR; ++i) {
+        sb = &super_table[i];
+        if (sb->dev == dev) {
+            break;
+        }
+    }
+    return sb;
+}
+
+// 读设备 dev 的超级块
+super_block_t* read_super(dev_t dev) {
+    super_block_t* sb = get_super(dev);
+    if (sb) {
+        return sb;
+    }
+
+    LOGK("Reading super block of dev %d (%s)\n", dev, device_get(dev)->name);
+
+    sb = get_free_super();
+
+    sb->cache = bread(dev, FS_SUPER_BLOCK_NR);
+    sb->desc = (super_desc_t*)sb->cache->data;
+    sb->dev = dev;
+
+    assert(sb->desc->magic == MINIX_V1_MAGIC);
+
+    memset(sb->imaps, 0, sizeof(sb->imaps));
+    memset(sb->zmaps, 0, sizeof(sb->zmaps));
+
+    int idx = FS_IMAP_BLOCK_NR;  // 读取块位图
+
+    // 读取 inode 位图
+    for (int i = 0; i < sb->desc->imap_blocks; ++i, ++idx) {
+        assert(i < IMAP_NR);
+        if (!(sb->imaps[i] = bread(dev, idx))){
+            panic("Superblock bread error with return NULL\n"); // 当前的bread不会返回错误。
+        }
+         
+    }
+    // 读取数据块位图
+    for (int i = 0; i < sb->desc->zmap_blocks; ++i, ++idx) {
+        assert(i < ZMAP_NR);
+        if (!(sb->zmaps[i] = bread(dev, idx))) {
+            panic("Superblock bread error with return NULL\n"); // 当前的bread不会返回错误。
+        }
+    }
+    
+    return sb;
+}
+
+static void mount_root(){
+    LOGK("Root file system mounting...\n");
+    // 假设主硬盘的第一个分区就是根文件系统
     device_t* device = device_find(DEV_IDE_PART, 0);
     assert(device);
+    // 读根文件系统超级块
+    root = read_super(device->dev);
+    LOGK("Root file system mounted\n");
+}
 
-    cache_t* boot = bread(device->dev, FS_BOOT_BLOCK_NR);
-    cache_t* super = bread(device->dev, FS_SUPER_BLOCK_NR);
-
-    super_desc_t* sb = (super_desc_t*)super->data;
-    assert(sb->magic == MINIX_V1_MAGIC);
-
-    // inode 位图
-    cache_t* imap = bread(device->dev, FS_IMAP_BLOCK_NR);
-    // 块位图
-    cache_t* zmap = bread(device->dev, FS_IMAP_BLOCK_NR + sb->imap_blocks);
-
-    // 读取首个 inode 块
-    cache_t* c1 = bread(device->dev, FS_IMAP_BLOCK_NR + sb->imap_blocks + sb->zmap_blocks);
-    inode_desc_t* inode = (inode_desc_t*)c1->data;
-
-    // 找到首个数据块，作为dir进行读取
-    cache_t* c2 = bread(device->dev, inode->zone[0]);
-    dentry_t* dir = (dentry_t*)c2->data;
-
-    inode_desc_t* helloi = NULL;
-    while(dir->nr){
-        LOGK("inode %04d, name %s\n", dir->nr, dir->name);
-        if(!strcmp(dir->name, "hello.txt")){
-            // 找到hello.txt的inode节点
-            helloi = &inode[dir->nr - 1];
-            strcpy(dir->name, "world.txt");
-            c2->dirty = true;
-            bwrite(c2); // file name
-        }
-        dir++;
+void super_init(void) {
+    for (size_t i = 0; i < SUPER_NR; ++i) {
+        super_block_t* sb = &super_table[i];
+        sb->dev = EOF;
+        sb->desc = NULL;
+        sb->cache = NULL;
+        sb->iroot = NULL;
+        sb->imount = NULL;
+        list_init(&sb->inode_list);
     }
-    if (helloi){
-        cache_t* c3 = bread(device->dev, helloi->zone[0]);
-        LOGK("content: %s", c3->data);
 
-        strncpy(c3->data, "This is modified content!!!\n", 29);
-        c3->dirty = true;
-
-        helloi->size = strlen(c3->data);
-        c1->dirty = true;
-        bwrite(c1); // file size
-        bwrite(c3); // file content
-    }
-    
-    
-    
+    mount_root();
 }
