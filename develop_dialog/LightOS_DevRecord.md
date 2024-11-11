@@ -2371,3 +2371,32 @@ typedef struct dentry_t {
 ## 根文件系统
 
 假设主盘的第一个分区就是根文件系统，直接读取其超级块作为根文件系统。
+
+为超级块与inode分别设置两个内存视图，主要目的是为了保存cache指针和检索方便
+
+```c
+// 内存视图的inode
+typedef struct inode_t {
+    inode_desc_t* desc;  // inode 描述符
+    cache_t* cache;      // inode 描述符所在cache
+    dev_t dev;           // 设备号
+    idx_t nr;            // i节点号
+    u32 count;           // 引用计数
+    time_t atime;        // 访问时间
+    time_t ctime;        // 创建时间
+    list_node_t node;    // 链表节点
+    dev_t mount;         // 安装设备
+} inode_t;
+// 内存视图的super block
+typedef struct super_block_t {
+    super_desc_t* desc;       // 超级块描述符
+    cache_t* cache;           // 超级块描述符所在cache
+    cache_t* imaps[IMAP_NR];  // inode位图缓冲
+    cache_t* zmaps[ZMAP_NR];  // 块位图缓冲
+    dev_t dev;                // 设备号
+    list_t inode_list;        // 使用中inode链表
+    inode_t* iroot;           // 根目录inode
+    inode_t* imount;          // 安装到的inode
+} super_block_t;
+```
+

@@ -10,7 +10,7 @@ typedef struct bitmap_t {
 } bitmap_t;
 
 // 构造位图
-void _bitmap_make(bitmap_t* map, char* bits, u32 length, u32 offset);
+void bitmap_make(bitmap_t* map, char* bits, u32 length, u32 offset);
 
 // 位图初始化，全部置为 0
 void bitmap_init(bitmap_t* map, char* bits, u32 length, u32 offset);

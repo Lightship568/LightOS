@@ -32,14 +32,14 @@ static super_block_t* get_free_super() {
 
 // 获取设备 dev 的超级块
 super_block_t* get_super(dev_t dev) {
-    super_block_t* sb = NULL;
+    super_block_t* sb;
     for (size_t i = 0; i < SUPER_NR; ++i) {
         sb = &super_table[i];
         if (sb->dev == dev) {
-            break;
+            return sb;
         }
     }
-    return sb;
+    return NULL;
 }
 
 // 读设备 dev 的超级块
@@ -67,23 +67,22 @@ super_block_t* read_super(dev_t dev) {
     // 读取 inode 位图
     for (int i = 0; i < sb->desc->imap_blocks; ++i, ++idx) {
         assert(i < IMAP_NR);
-        if (!(sb->imaps[i] = bread(dev, idx))){
-            panic("Superblock bread error with return NULL\n"); // 当前的bread不会返回错误。
+        if (!(sb->imaps[i] = bread(dev, idx))) {
+            panic("Superblock bread error with return NULL\n");  // 当前的bread不会返回错误。
         }
-         
     }
     // 读取数据块位图
     for (int i = 0; i < sb->desc->zmap_blocks; ++i, ++idx) {
         assert(i < ZMAP_NR);
         if (!(sb->zmaps[i] = bread(dev, idx))) {
-            panic("Superblock bread error with return NULL\n"); // 当前的bread不会返回错误。
+            panic("Superblock bread error with return NULL\n");  // 当前的bread不会返回错误。
         }
     }
-    
+
     return sb;
 }
 
-static void mount_root(){
+static void mount_root() {
     LOGK("Root file system mounting...\n");
     // 假设主硬盘的第一个分区就是根文件系统
     device_t* device = device_find(DEV_IDE_PART, 0);
@@ -91,6 +90,13 @@ static void mount_root(){
     // 读根文件系统超级块
     root = read_super(device->dev);
     LOGK("Root file system mounted\n");
+
+    idx_t idx = ialloc(root->dev);
+
+    ifree(root->dev, idx);
+
+    idx = balloc(root->dev);
+    bfree(root->dev, idx);
 }
 
 void super_init(void) {

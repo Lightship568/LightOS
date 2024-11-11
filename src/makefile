@@ -110,6 +110,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/device.o	\
 	$(BUILD)/kernel/cache.o		\
 	$(BUILD)/fs/super.o 		\
+	$(BUILD)/fs/bmap.o 		\
 
 
 	$(shell mkdir -p $(dir $@))

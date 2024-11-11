@@ -158,14 +158,14 @@ void brelse(cache_t* pcache) {
     }
     pcache->count--;
     assert(pcache->count >= 0);
-    if (!pcache->count){
-        // 理论上释放时，rnode不会加入任何链表
-        assert(!pcache->rnode.next);
-        // if (pcache->rnode.next){
-        //     list_remove(&pcache->rnode);
-        // }
-        list_push(&free_list, &pcache->rnode);
-    }
+    if (pcache->count) // 还有引用计数，直接返回不释放
+        return;
+
+    // 理论上释放时，rnode不会加入任何链表
+    assert(!pcache->rnode.next);
+    assert(!pcache->rnode.prev);
+    list_push(&free_list, &pcache->rnode);
+
     // 脏位需写入，当前启用强一致
     if (pcache->dirty){
         bwrite(pcache);

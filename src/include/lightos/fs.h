@@ -15,6 +15,8 @@
 #define IMAP_NR 8  // inode 位图块最大值
 #define ZMAP_NR 8  // 块位图块最大值
 
+#define BLOCK_BITS (BLOCK_SIZE * 8) // 一个块的位图能管理的大小
+
 typedef struct inode_desc_t {
     u16 mode;  // 文件类型和属性(rwx 位)
     u16 uid;   // 用户id（文件拥有者标识符）
@@ -25,7 +27,7 @@ typedef struct inode_desc_t {
     u16 zone[9];  // 直接 (0-6)、间接(7)或双重间接 (8) 逻辑块号
 } inode_desc_t;
 
-// 内存视图的inode
+// 内存视图的 inode
 typedef struct inode_t {
     inode_desc_t* desc;  // inode 描述符
     cache_t* cache;      // inode 描述符所在cache
@@ -36,7 +38,6 @@ typedef struct inode_t {
     time_t ctime;        // 创建时间
     list_node_t node;    // 链表节点
     dev_t mount;         // 安装设备
-
 } inode_t;
 
 typedef struct super_desc_t {
@@ -50,6 +51,7 @@ typedef struct super_desc_t {
     u16 magic;          // 文件系统魔数
 } super_desc_t;
 
+// 内存视图的 super block
 typedef struct super_block_t {
     super_desc_t* desc;       // 超级块描述符
     cache_t* cache;           // 超级块描述符所在cache
@@ -66,5 +68,22 @@ typedef struct dentry_t {
     u16 nr;         // i 节点
     char name[14];  // 文件名
 } dentry_t;
+
+
+// 获取设备 dev 的超级块
+super_block_t* get_super(dev_t dev);
+// 读设备 dev 的超级块
+super_block_t* read_super(dev_t dev);
+// 初始化
+void super_init(void);
+
+// 分配一个文件块
+idx_t balloc(dev_t dev);
+// 释放一个文件块
+void bfree(dev_t dev, idx_t idx);
+// 分配一个文件系统 inode
+idx_t ialloc(dev_t dev);
+// 释放一个文件系统 inode
+void ifree(dev_t dev, idx_t idx);
 
 #endif

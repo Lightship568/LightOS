@@ -3,7 +3,7 @@
 #include <sys/assert.h>
 
 // 构造位图
-void _bitmap_make(bitmap_t* map, char* bits, u32 length, u32 offset) {
+void bitmap_make(bitmap_t* map, char* bits, u32 length, u32 offset) {
     map->bits = bits;
     map->length = length; // 字节数
     map->offset = offset; // 起始偏移
@@ -12,7 +12,7 @@ void _bitmap_make(bitmap_t* map, char* bits, u32 length, u32 offset) {
 // 位图初始化，全部置为 0
 void bitmap_init(bitmap_t* map, char* bits, u32 length, u32 offset) {
     memset(bits, 0, length);
-    _bitmap_make(map, bits, length, offset);
+    bitmap_make(map, bits, length, offset);
 }
 
 // 测试某一位是否为 1
