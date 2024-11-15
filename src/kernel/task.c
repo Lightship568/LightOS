@@ -162,6 +162,8 @@ pid_t task_create(void (*eip_ptr)(void),
     task->priority = priority;
     task->uid = uid;
     task->brk = 0;
+    task->iroot = get_root_inode();
+    task->ipwd = task->iroot;
     task->magic = LIGHTOS_MAGIC;
 
     task->tss.eip = (u32)eip_ptr;

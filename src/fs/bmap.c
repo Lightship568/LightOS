@@ -119,3 +119,58 @@ void ifree(dev_t dev, idx_t idx) {
     pcache->dirty = true;
     bwrite(pcache);  // 强一致
 }
+
+idx_t bmap(inode_t* inode, idx_t block, bool create){
+    assert(block >=0 && block < TOTAL_BLOCKS);
+    u16 index = block;
+    u16* array = inode->desc->zone;
+    cache_t* pcache = inode->cache;
+
+    // 用于下面的 brelse, 传入参数 inode 的 cache 不应该释放
+    pcache->count++;
+    // 当前处理级别
+    int level = 0;
+    // 当前子级别块数量
+    int divider = 1;
+
+    // 直接块
+    if (block < DIRECT_BLOCK){
+        goto reckon;
+    }
+
+    block -= DIRECT_BLOCK;
+    if (block< INDIRECT1_BLOCKS){
+        index = DIRECT_BLOCK;
+        level = 1;
+        divider = 1;
+        goto reckon;
+    }
+    block -= INDIRECT1_BLOCKS;
+    assert(block < INDIRECT2_BLOCKS);
+    index = DIRECT_BLOCK + 1;
+    level = 2;
+    divider = BLOCK_INDEXES;
+
+reckon:
+    for (; level >= 0; level--){
+        // 如果不存在，且 create，则申请一块文件快
+        if (!array[index] && create){
+            array[index] = balloc(inode->dev);
+            pcache->dirty = true;
+        }
+
+        brelse(pcache);
+
+        // 如果 level== 0 或者 索引不存在，则直接返回
+        if (level == 0 || !array[index]){
+            return array[index];
+        }
+
+        // level 非 0， 处理下一级索引
+        pcache = bread(inode->dev, array[index]);
+        index = block / divider;
+        block = block % divider;
+        divider /= BLOCK_INDEXES;
+        array = (u16*)pcache->data;
+    }
+}

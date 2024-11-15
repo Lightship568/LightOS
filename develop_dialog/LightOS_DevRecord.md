@@ -2321,6 +2321,16 @@ typedef struct dentry_t {
 } dentry_t;
 ```
 
+### 一些细节
+
+* zmap[8] 可以计算出，MINIX V1 最大盘块是 64MB：1K * 8 个位 *1 K * 8 个块
+* 然而最大文件是 256MB：(7+512+512 * 512）* 1K。
+* 由于查找新的空闲盘块可能返回 NULL 也就是 0，因此逻辑块最低比特不使用，并且在文件系统初始化时预先置1。
+* inode同理，且imap[0]对应的第1个inode也不使用。文件系统初始化同样预先置1。
+* 
+
+
+
 ### 逻辑块与数据块的区别
 
 * 也就是说，在minix v1，数据块和逻辑块相等都是1K，但是实际上，可以将逻辑块设置为4K，但是数据块是1K，这样操作系统可以以逻辑块读取多个小文件，并且通过数据块找到对应的小文件，从而节省空间？数据块的作用就是为了节省空间吗，为什么不默认逻辑块和数据块相同？
@@ -2375,7 +2385,7 @@ typedef struct dentry_t {
 为超级块与inode分别设置两个内存视图，主要目的是为了保存cache指针和检索方便
 
 ```c
-// 内存视图的inode
+// 内存视图的 inode
 typedef struct inode_t {
     inode_desc_t* desc;  // inode 描述符
     cache_t* cache;      // inode 描述符所在cache
@@ -2387,7 +2397,7 @@ typedef struct inode_t {
     list_node_t node;    // 链表节点
     dev_t mount;         // 安装设备
 } inode_t;
-// 内存视图的super block
+// 内存视图的 super block
 typedef struct super_block_t {
     super_desc_t* desc;       // 超级块描述符
     cache_t* cache;           // 超级块描述符所在cache
@@ -2400,3 +2410,7 @@ typedef struct super_block_t {
 } super_block_t;
 ```
 
+几个细节：
+
+1. inode 的 nr 是从 1 开始的。
+2. 

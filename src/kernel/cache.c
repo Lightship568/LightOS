@@ -111,7 +111,8 @@ static cache_t* get_free_cache(){
 // 获得设备 dev 第 block 对应的缓冲
 cache_t* getblk(dev_t dev, idx_t block) {
     cache_t* pcache = get_from_hash_table(dev, block);
-    if (pcache){
+    if (pcache) {
+        assert(pcache->valid);
         return pcache;
     }
     pcache = get_free_cache();

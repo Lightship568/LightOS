@@ -6,14 +6,6 @@
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
-/**
- * MINIX V1，每块 1K，顺序如下
- * | boot | superblock | imap(s) | bmap(s) | inode(s)...
- */
-#define FS_BOOT_BLOCK_NR 0
-#define FS_SUPER_BLOCK_NR 1
-#define FS_IMAP_BLOCK_NR 2
-
 #define SUPER_NR 16                          // 超级块表16个
 static super_block_t super_table[SUPER_NR];  // 超级块表
 static super_block_t* root;                  // 根文件系统超级块
@@ -89,14 +81,21 @@ static void mount_root() {
     assert(device);
     // 读根文件系统超级块
     root = read_super(device->dev);
+
+    // 初始化根目录inode
+    root->iroot = iget(device->dev, 1); 
+    root->imount = root->iroot;
+
+    idx_t idx = 0;
+    inode_t* inode = iget(device->dev, 1);
+
+    idx = bmap(inode, 3, true);
+    idx = bmap(inode, 7+7, true);
+    idx = bmap(inode, 7+512*3+510, true);
+
+    iput(inode);
+
     LOGK("Root file system mounted\n");
-
-    idx_t idx = ialloc(root->dev);
-
-    ifree(root->dev, idx);
-
-    idx = balloc(root->dev);
-    bfree(root->dev, idx);
 }
 
 void super_init(void) {

@@ -25,6 +25,7 @@ extern void schedule(void);
 extern void tss_init(void);
 extern void idle(void);
 extern void super_init(void);
+extern void inode_init(void);
 
 void kernel_init(void) {
     tss_init();  // 初始化 GDT[3] TSS
@@ -45,6 +46,7 @@ void kernel_init(void) {
     page_cache_init();  // 缓冲初始化
 
     super_init(); // 文件系统超级块初始化
+    inode_init(); // 文件系统 inode 初始化
 
     idle();  // set stack & sti
 }
