@@ -1,4 +1,3 @@
-#pragma
 #ifndef LIGHTOS_TASK_H
 #define LIGHTOS_TASK_H
 
@@ -7,7 +6,6 @@
  */
 
 #include <lib/list.h>
-#include <lightos/fs.h>
 #include <sys/global.h>
 #include <sys/types.h>
 
@@ -69,7 +67,7 @@ typedef enum task_state_t {
 } task_state_t;
 
 // PCB
-typedef struct task_struct {
+typedef struct task_t {
     u32* stack;                // 内核栈
     task_state_t state;        // 任务状态
     u32 priority;              // 任务优先级
@@ -80,9 +78,9 @@ typedef struct task_struct {
     char name[TASK_NAME_LEN];  // 任务名
     u32 uid;                   // 用户ID
     u32 pde;                   // 页目录物理地址
-    struct list_node_t node;   // 链表
+    list_node_t node;          // 链表
     struct bitmap_t* vmap;     // 进程虚拟内存位图
-    struct tss_t tss;          // TSS
+    tss_t tss;                 // TSS
     u32 brk;                   // 进程堆内存最高地址
     int32 status;              // 进程特殊状态
     pid_t waitpid;             // 进程等待的 pid

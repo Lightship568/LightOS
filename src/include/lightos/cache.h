@@ -1,5 +1,5 @@
-#ifndef LIGHTOS_BUFFER_H
-#define LIGHTOS_BUFFER_H
+#ifndef LIGHTOS_CACHE_H
+#define LIGHTOS_CACHE_H
 
 #include <lib/list.h>
 #include <lib/mutex.h>
@@ -15,9 +15,9 @@ typedef struct cache_t {
     dev_t dev;          // 设备号
     idx_t block;        // 块号
     int count;          // 引用计数
-    list_node_t hnode;  // hash_table 哈希表拉链节点
-    list_node_t rnode;  // free_list 空闲缓冲节点
-    mutex_t lock;       // 锁
+    struct list_node_t hnode;  // hash_table 哈希表拉链节点
+    struct list_node_t rnode;  // free_list 空闲缓冲节点
+    struct mutex_t lock;       // 锁
     bool dirty;         // 脏位
     bool valid;         // 是否有效
 } cache_t;

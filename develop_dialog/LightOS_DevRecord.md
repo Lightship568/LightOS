@@ -30,6 +30,14 @@ LightOS 操作系统开发日志
 
 爆栈，可能是 esp > ebp
 
+## 头文件相互引用
+
+若两个头文件相互引用，就算定义了 \#pragma once 或者 ifndef 的引入控制，也会导致引入失败。此时需要确保单向引用，考虑引用来源一般是结构体指针定义，因此结构体定义需要向前声明，即增加 struct 标注。
+
+例如，在 fs 中定义了 inode，并通过cache、mutex多层引用到了task。而task结构体却定义了inode的指针，导致互相引用的问题，编译报错在fs定义的inode等结构体中找不到cache_t的结构体。解决方法就是去掉task对fs的引用，在定义task_t 时，使用 struct 定义 inode 节点。
+
+所以习惯性使用 struct 定义可以防止头文件互相包含的问题。
+
 
 
 # 开发准备
@@ -2413,4 +2421,3 @@ typedef struct super_block_t {
 几个细节：
 
 1. inode 的 nr 是从 1 开始的。
-2. 

@@ -2,8 +2,8 @@
 #define LIGHTOS_FS_H
 
 #include <lib/list.h>
-#include <lightos/cache.h>
 #include <sys/types.h>
+#include <lightos/cache.h>
 
 // defined in cache.h
 // #define BLOCK_SIZE 1024  // 块大小
