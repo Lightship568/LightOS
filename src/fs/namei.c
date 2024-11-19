@@ -109,7 +109,6 @@ cache_t* add_entry(inode_t* dir, const char* name, dentry_t** result) {
         dir->desc->mtime = sys_time();
         dir->cache->dirty = true;
         *result = entry;
-        // 注意：dir 和 pcache 当前都没有强一致
         return pcache;
     }
 }
@@ -122,33 +121,45 @@ void dir_test(){
     dentry_t* entry = NULL;
     cache_t* pcache = NULL;
 
-    char* pathname = "d1/d2/d3/d4";
-    char* name = pathname;
 
-    dev_t dev = inode->dev;
+    dev_t dev = inode->dev;   
 
-    pcache = find_entry(&inode, name, &next, &entry);
+    pcache = find_entry(&inode, "hello.txt", &next, &entry);
+    idx_t nr = entry->nr;
     brelse(pcache);
+
+    pcache = add_entry(inode, "world.txt", &entry);
+    entry->nr = nr;
+
+    inode_t* hello = iget(dev, nr);
+    hello->desc->nlinks++;
+    hello->cache->dirty = true;
     iput(inode);
+    iput(hello);
+    brelse(pcache);
+
+    // char* pathname = "d1/d2/d3/d4";
+    // char* name = pathname;
+    // pcache = find_entry(&inode, name, &next, &entry);
+    // brelse(pcache);
+    // iput(inode);
     
-    inode = iget(dev, entry->nr);
-    name = next;
-    pcache = find_entry(&inode, name, &next, &entry);
-    brelse(pcache);
-    iput(inode);
+    // inode = iget(dev, entry->nr);
+    // name = next;
+    // pcache = find_entry(&inode, name, &next, &entry);
+    // brelse(pcache);
+    // iput(inode);
 
-    inode = iget(dev, entry->nr);
-    name = next;
-    pcache = find_entry(&inode, name, &next, &entry);
-    
-    iput(inode);
+    // inode = iget(dev, entry->nr);
+    // name = next;
+    // pcache = find_entry(&inode, name, &next, &entry);
+    // brelse(pcache);
+    // iput(inode);
 
-    inode = iget(dev, entry->nr);
-    name = next;
-    pcache = find_entry(&inode, name, &next, &entry);
-    brelse(pcache);
+    // inode = iget(dev, entry->nr);
+    // name = next;
+    // pcache = find_entry(&inode, name, &next, &entry);
+    // brelse(pcache);
+    // iput(inode);
 
-    pcache = add_entry(inode, "add_dir", &entry);
-    brelse(pcache);
-    iput(inode);
 }
