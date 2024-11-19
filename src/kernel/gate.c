@@ -36,8 +36,6 @@ u32 sys_write(fd_t fd, char* buf, u32 len) {
     return -1;
 }
 
-extern time_t sys_time();  // clock.c
-
 static u32 sys_test() {
     char ch;
     device_t* device;
@@ -59,6 +57,9 @@ static u32 sys_test() {
     // brelse(pcache);
 }
 
+extern time_t sys_time();  // clock.c
+extern mode_t sys_umask(mode_t mask); // system.c
+
 // 系统调用表初始化，把散落各处的sys_处理函数指针保存到表中
 void syscall_init(void) {
     for (size_t i = 0; i < NR_SYSCALL; ++i) {
@@ -75,6 +76,7 @@ void syscall_init(void) {
     syscall_table[SYS_NR_EXIT] = sys_exit;
     syscall_table[SYS_NR_WAITPID] = sys_waitpid;
     syscall_table[SYS_NR_TIME] = sys_time;
+    syscall_table[SYS_NR_UMASK] = sys_umask;
 
     DEBUGK("Syscall initialized\n");
 }

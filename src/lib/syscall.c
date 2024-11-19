@@ -88,3 +88,7 @@ pid_t waitpid(pid_t pid, int32* status, int32 options){
 time_t time(){
     return _syscall0(SYS_NR_TIME);
 }
+
+mode_t umask(mode_t mask){
+    return _syscall1(SYS_NR_UMASK, (u32)mask);
+}

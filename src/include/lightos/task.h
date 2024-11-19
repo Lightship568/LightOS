@@ -12,7 +12,7 @@
 #define NR_TASKS 64
 
 #define KERNEL_RING0 0
-#define USER_RING3 1
+#define USER_RING3 1000
 
 #define TASK_NAME_LEN 16
 
@@ -77,6 +77,7 @@ typedef struct task_t {
     pid_t ppid;                // 父任务ID
     char name[TASK_NAME_LEN];  // 任务名
     u32 uid;                   // 用户ID
+    u32 gid;                   // 组ID
     u32 pde;                   // 页目录物理地址
     list_node_t node;          // 链表
     struct bitmap_t* vmap;     // 进程虚拟内存位图
@@ -86,6 +87,7 @@ typedef struct task_t {
     pid_t waitpid;             // 进程等待的 pid
     struct inode_t* ipwd;      // 进程当前目录 inode
     struct inode_t* iroot;     // 进程根目录 inode
+    u16 umask;                  // 进程用户权限
     u32 magic;  // 检测内核栈溢出（溢出到 PCB 就寄了）
 } task_t;
 

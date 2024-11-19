@@ -50,6 +50,8 @@ typedef u32 pid_t;
 
 typedef u32 dev_t;
 
+typedef u16 mode_t;
+
 typedef int32 fd_t;
 typedef enum std_fd_t{
     stdin,

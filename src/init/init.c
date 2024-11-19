@@ -76,6 +76,8 @@ void init_uthread(void){
     int pid;
     int status;
     printf("pid %d start!\n", getpid());
+    mode_t mode = umask(0002);
+    printf("old mode : %o", mode);
     while (true){
         test();
     }

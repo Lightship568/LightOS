@@ -84,16 +84,8 @@ static void mount_root() {
 
     // 初始化根目录inode
     root->iroot = iget(device->dev, 1); 
-    root->imount = root->iroot;
-
-    idx_t idx = 0;
-    inode_t* inode = iget(device->dev, 1);
-
-    idx = bmap(inode, 3, true);
-    idx = bmap(inode, 7+7, true);
-    idx = bmap(inode, 7+512*3+510, true);
-
-    iput(inode);
+    // 根目录挂载点
+    root->imount = iget(device->dev, 1); // 增加引用计数
 
     LOGK("Root file system mounted\n");
 }
