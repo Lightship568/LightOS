@@ -27,12 +27,12 @@
 #define BLOCK_INODES (BLOCK_SIZE / sizeof(inode_desc_t))  // 块 inode 数量
 #define BLOCK_DENTRIES (BLOCK_SIZE / sizeof(dentry_t))    // 块 dentry 数量
 
-#define DIRECT_BLOCK (7)                          // 直接块数量
+#define DIRECT_BLOCKS (7)                          // 直接块数量
 #define BLOCK_INDEXES (BLOCK_SIZE / sizeof(u16))  // 块索引数量
 #define INDIRECT1_BLOCKS BLOCK_INDEXES            // 一级间接块数量
 #define INDIRECT2_BLOCKS (INDIRECT1_BLOCKS * INDIRECT1_BLOCKS)  // 二级间接块数量
 
-#define TOTAL_BLOCKS (DIRECT_BLOCK + INDIRECT1_BLOCKS + INDIRECT2_BLOCKS)  // 全部块数量
+#define TOTAL_BLOCKS (DIRECT_BLOCKS + INDIRECT1_BLOCKS + INDIRECT2_BLOCKS)  // 全部块数量
 
 typedef struct inode_desc_t {
     u16 mode;  // 文件类型和属性(rwx 位)
@@ -103,7 +103,7 @@ idx_t ialloc(dev_t dev);
 void ifree(dev_t dev, idx_t idx);
 
 // 获取 inode 第 block 块的索引值
-// 如果不存在且 create 为 true，则创建
+// 如果不存在且 create 为 true，则在 data zone 创建一级/二级索引块
 idx_t bmap(inode_t* inode, idx_t block, bool create);
 
 // 获取根目录 inode

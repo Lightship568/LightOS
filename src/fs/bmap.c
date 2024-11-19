@@ -122,6 +122,7 @@ void ifree(dev_t dev, idx_t idx) {
 
 idx_t bmap(inode_t* inode, idx_t block, bool create){
     assert(block >=0 && block < TOTAL_BLOCKS);
+    // 将每一个level视作一个array，查找block偏移
     u16 index = block;
     u16* array = inode->desc->zone;
     cache_t* pcache = inode->cache;
@@ -134,20 +135,22 @@ idx_t bmap(inode_t* inode, idx_t block, bool create){
     int divider = 1;
 
     // 直接块
-    if (block < DIRECT_BLOCK){
+    if (block < DIRECT_BLOCKS){
         goto reckon;
     }
 
-    block -= DIRECT_BLOCK;
-    if (block< INDIRECT1_BLOCKS){
-        index = DIRECT_BLOCK;
+    block -= DIRECT_BLOCKS;
+    // 一级间接块
+    if (block < INDIRECT1_BLOCKS){
+        index = DIRECT_BLOCKS; // 设置为一级间接块
         level = 1;
         divider = 1;
         goto reckon;
     }
+    // 二级间接块
     block -= INDIRECT1_BLOCKS;
     assert(block < INDIRECT2_BLOCKS);
-    index = DIRECT_BLOCK + 1;
+    index = DIRECT_BLOCKS + 1; // 设置为二级间接块
     level = 2;
     divider = BLOCK_INDEXES;
 
@@ -161,7 +164,7 @@ reckon:
 
         brelse(pcache);
 
-        // 如果 level== 0 或者 索引不存在，则直接返回
+        // 如果 level == 0 或者 索引不存在，则直接返回
         if (level == 0 || !array[index]){
             return array[index];
         }

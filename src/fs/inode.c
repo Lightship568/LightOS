@@ -54,12 +54,14 @@ static inode_t* find_inode(dev_t dev, idx_t nr) {
     return NULL;
 }
 
+extern time_t sys_time(void);
+
 // 获取 inode
 inode_t* iget(dev_t dev, idx_t nr) {
     inode_t* inode = find_inode(dev, nr);
     if (inode) {
         inode->count++;
-        inode->atime = time();
+        inode->atime = sys_time();
         return inode;
     }
     super_block_t* sb = get_super(dev);
@@ -82,7 +84,7 @@ inode_t* iget(dev_t dev, idx_t nr) {
     inode->desc = &((inode_desc_t*)pcache->data)[(inode->nr - 1) % BLOCK_INODES];
 
     inode->ctime = inode->desc->mtime;
-    inode->atime = time();
+    inode->atime = sys_time();
 
     return inode;
 }

@@ -2331,13 +2331,10 @@ typedef struct dentry_t {
 
 ### 一些细节
 
-* zmap[8] 可以计算出，MINIX V1 最大盘块是 64MB：1K * 8 个位 *1 K * 8 个块
+* zmap[8] 可以计算出，MINIX V1 最大盘块是 64MB：1K * 8 个位 *1 K * 8 个块。
 * 然而最大文件是 256MB：(7+512+512 * 512）* 1K。
 * 由于查找新的空闲盘块可能返回 NULL 也就是 0，因此逻辑块最低比特不使用，并且在文件系统初始化时预先置1。
 * inode同理，且imap[0]对应的第1个inode也不使用。文件系统初始化同样预先置1。
-* 
-
-
 
 ### 逻辑块与数据块的区别
 
@@ -2390,7 +2387,9 @@ typedef struct dentry_t {
 
 假设主盘的第一个分区就是根文件系统，直接读取其超级块作为根文件系统。
 
-为超级块与inode分别设置两个内存视图，主要目的是为了保存cache指针和检索方便
+为超级块与inode分别设置两个内存视图，主要目的是为了保存cache指针和检索方便。
+
+要注意，inode 和 data 的 0 位不使用，因此 nr 是从 1 开始的。
 
 ```c
 // 内存视图的 inode
@@ -2418,6 +2417,46 @@ typedef struct super_block_t {
 } super_block_t;
 ```
 
-几个细节：
+inode->zmap 的直接块、一级间接块、二级间接块逻辑如下图所示：
 
-1. inode 的 nr 是从 1 开始的。
+![image-20241119110800715](D:\Markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\文件系统)
+
+### 实现功能
+
+主要实现了几个功能函数：
+
+```c
+// 获取设备 dev 的超级块
+super_block_t* get_super(dev_t dev);
+// 读设备 dev 的超级块
+super_block_t* read_super(dev_t dev);
+
+// 分配一个文件块
+idx_t balloc(dev_t dev);
+// 释放一个文件块
+void bfree(dev_t dev, idx_t idx);
+// 分配一个文件系统 inode
+idx_t ialloc(dev_t dev);
+// 释放一个文件系统 inode
+void ifree(dev_t dev, idx_t idx);
+
+// 获取 inode 第 block 块的索引值，如果不存在且 create 为 true，则在 data zone 创建一级/二级索引块
+idx_t bmap(inode_t* inode, idx_t block, bool create);
+
+// 获取根目录 inode
+inode_t* get_root_inode();
+// 获取设备 dev 的 nr inode
+inode_t* iget(dev_t dev, idx_t nr);
+// 释放 inode
+void iput(inode_t* inode);
+```
+
+备注：
+
+1. balloc：从 data zone 分配新的数据块，返回 LBA。逻辑是查找并置一 zmap 位图（的缓存）
+2. bfree：释放
+3. ialloc：从 inode zone 分配新的inode节点，返回 inode nr。逻辑同理
+4. ifree：释放
+5. bmap：逻辑是通过012级的索引，找到 inode 下第 block 块所在的 LBA，为后续读写做准备。
+6. iget：获取 nr 号的 inode。逻辑是找到该 inode 所在块的缓存，数组偏移找到 inode，并将其加入全局 inode 表和当前设备的 inode 链。
+

@@ -45,8 +45,8 @@ void kernel_init(void) {
     ide_init();         // 硬盘驱动初始化
     page_cache_init();  // 缓冲初始化
 
-    super_init(); // 文件系统超级块初始化
     inode_init(); // 文件系统 inode 初始化
+    super_init(); // 文件系统超级块初始化
 
     idle();  // set stack & sti
 }
