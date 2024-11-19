@@ -70,17 +70,17 @@ fs: $(BUILD)/LightOS.img $(BUILD)/slave.img
 	sudo losetup -d ${LOOP_DEV}
 
 # 检查文件系统
-.PHONY: mount0
-mount0: $(BUILD)/LightOS.img
+.PHONY: mount1
+mount1: $(BUILD)/LightOS.img
 	$(eval LOOP_DEV := $(shell sudo losetup --partscan -f $(BUILD)/LightOS.img --show))
 	@echo "Create master loop dev: ${LOOP_DEV}"
 	sudo mount ${LOOP_DEV}p1 $(MNT_PATH)
 	sudo chown ${USER} $(MNT_PATH)
 
-.PHONY: mount1
-mount1: $(BUILD)/slave.img
+.PHONY: mount2
+mount2: $(BUILD)/slave.img
 	$(eval LOOP_DEV := $(shell sudo losetup --partscan -f $(BUILD)/slave.img --show))
-	@echo "Create master loop dev: ${LOOP_DEV}"
+	@echo "Create slave loop dev: ${LOOP_DEV}"
 	sudo mount ${LOOP_DEV}p1 $(MNT_PATH)
 	sudo chown ${USER} $(MNT_PATH)
 

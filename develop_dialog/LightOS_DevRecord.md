@@ -2524,3 +2524,16 @@ minix 的文件信息存储在 `inode.mode` 字段中，总共有 16 位，其�
 
 例如，如果 `umask` 是 `022`，则会去掉 **组（group）和其他用户（others）** 的写权限。
 
+### 文件系统目录操作
+
+```c
+// 判断文件名是否相等
+bool match_name(const char *name, const char *entry_name, char **next);
+
+// 获取 dir 目录下的 name 目录 所在的 dentry_t 和 buffer_t
+buffer_t *find_entry(inode_t **dir, const char *name, char **next, dentry_t **result);
+
+// 在 dir 目录中添加 name 目录项
+buffer_t *add_entry(inode_t *dir, const char *name, dentry_t **result);
+```
+

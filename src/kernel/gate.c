@@ -36,7 +36,11 @@ u32 sys_write(fd_t fd, char* buf, u32 len) {
     return -1;
 }
 
+extern void dir_test(void);
+
 static u32 sys_test() {
+    dir_test();
+
     char ch;
     device_t* device;
 

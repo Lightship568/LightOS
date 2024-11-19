@@ -11,9 +11,9 @@ QEMU+= -audiodev pa,id=hda,server=/run/user/1000/pulse/native
 QEMU+= -machine pcspk-audiodev=hda
 QEMU+= -rtc base=localtime
 
-QEMU_DISK:= -boot c
-QEMU_DISK+= -drive file=$(BUILD)/LightOS.img,if=ide,index=0,media=disk,format=raw 	# 主硬盘
-QEMU_DISK+= -drive file=$(BUILD)/slave.img,if=ide,index=1,media=disk,format=raw 	# 从硬盘
+QEMU_DISK_BOOT:= -boot c
+QEMU_DISK_BOOT+= -drive file=$(BUILD)/LightOS.img,if=ide,index=0,media=disk,format=raw 	# 主硬盘
+QEMU_DISK_BOOT+= -drive file=$(BUILD)/slave.img,if=ide,index=1,media=disk,format=raw 	# 从硬盘
 
 QEMU_CDROM:= -boot d
 QEMU_CDROM+= -drive file=$(BUILD)/kernel.iso,media=cdrom
@@ -24,11 +24,11 @@ QEMU_DEBUG:=-s -S
 
 .PHONY: qemu
 qemu: $(IMAGES)
-	$(QEMU) $(QEMU_DISK)
+	$(QEMU) $(QEMU_DISK_BOOT)
 
 .PHONY: qemug
 qemug: $(IMAGES)
-	$(QEMU) $(QEMU_DISK) $(QEMU_DEBUG)
+	$(QEMU) $(QEMU_DISK_BOOT) $(QEMU_DEBUG)
 
 # .PHONY: qemu-grub
 # qemu-grub: $(BUILD)/kernel.iso

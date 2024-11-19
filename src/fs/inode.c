@@ -94,6 +94,10 @@ void iput(inode_t* inode){
     if (!inode){
         return;
     }
+    
+    if (inode->cache->dirty){
+        bwrite(inode->cache); // 强一致
+    }
 
     inode->count--;
     if (inode->count){
