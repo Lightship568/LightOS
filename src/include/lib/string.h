@@ -9,6 +9,11 @@
 
 #include <sys/types.h>
 
+#define SEPARATOR1 '/'   // 目录分隔符 1
+#define SEPARATOR2 '\\'  // 目录分隔符 2
+#define IS_SEPARATOR(c) \
+    (c == SEPARATOR1 || c == SEPARATOR2)  // 字符是否位目录分隔符
+
 char *strcpy(char *dest, const char *src);
 // 添加字符串EOS
 char *strncpy(char *dest, const char *src, size_t count);

@@ -34,11 +34,6 @@
 
 #define TOTAL_BLOCKS (DIRECT_BLOCKS + INDIRECT1_BLOCKS + INDIRECT2_BLOCKS)  // 全部块数量
 
-#define SEPARATOR1 '/'
-#define SEPARATOR2 '\\'
-// #define IS_SEPARATOR(c) (c == SEPARATOR1 || c == SEPARATOR2) // 字符是否为目录分割符
-#define IS_SEPARATOR(c) (c == SEPARATOR1) // 字符是否为目录分割符
-
 typedef struct inode_desc_t {
     u16 mode;  // 文件类型和属性(rwx 位)
     u16 uid;   // 用户id（文件拥有者标识符）
@@ -124,5 +119,10 @@ bool match_name(const char *name, const char *entry_name, char **next);
 cache_t *find_entry(inode_t **dir, const char *name, char **next, dentry_t **result);
 // 在 dir 目录中添加 name 目录项
 cache_t *add_entry(inode_t *dir, const char *name, dentry_t **result);
+
+// 获取父目录 inode
+inode_t* named(char* pathname, char** next);
+// 获取目标 inode
+inode_t* namei(char* pathname);
 
 #endif

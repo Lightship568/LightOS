@@ -95,4 +95,4 @@ umount:
 	sudo losetup -d $(DEV)
 
 
-IMAGES:= $(BUILD)/LightOS.img $(BUILD)/slave.img fs
+IMAGES:= $(BUILD)/LightOS.img $(BUILD)/slave.img
