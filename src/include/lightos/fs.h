@@ -33,6 +33,7 @@
 #define INDIRECT2_BLOCKS (INDIRECT1_BLOCKS * INDIRECT1_BLOCKS)  // 二级间接块数量
 
 #define TOTAL_BLOCKS (DIRECT_BLOCKS + INDIRECT1_BLOCKS + INDIRECT2_BLOCKS)  // 全部块数量
+#define FILE_MAX_SIZE (TOTAL_BLOCKS * BLOCK_SIZE) // 文件最大大小（256MB）
 
 typedef struct inode_desc_t {
     u16 mode;  // 文件类型和属性(rwx 位)
@@ -52,7 +53,7 @@ typedef struct inode_t {
     idx_t nr;            // i节点号
     u32 count;           // 引用计数
     time_t atime;        // 访问时间
-    time_t ctime;        // 创建时间
+    time_t ctime;        // 修改时间
     list_node_t node;    // 链表节点
     dev_t mount;         // 安装设备
 } inode_t;
@@ -124,5 +125,11 @@ cache_t *add_entry(inode_t *dir, const char *name, dentry_t **result);
 inode_t* named(char* pathname, char** next);
 // 获取目标 inode
 inode_t* namei(char* pathname);
+
+// 从 inode 的 offset 处，读 len 个字节 到 buf
+int inode_read(inode_t* inode, char* buf, u32 len, off_t offset);
+// 从 inode 的 ofsset 处，将 buf 的 len 个字节写入磁盘
+int inode_write(inode_t* inode, char* buf, u32 len, off_t offset);
+
 
 #endif

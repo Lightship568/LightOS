@@ -5,6 +5,7 @@
 #include <sys/assert.h>
 #include <sys/types.h>
 #include <lib/string.h>
+#include <lib/stdlib.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -154,36 +155,6 @@ cache_t* add_entry(inode_t* dir, const char* name, dentry_t** result) {
     }
 }
 
-void dir_test() {
-    char pathname[] = "/d1/d2////d3/d4/";
-    inode_t* inode = namei(pathname);
-    if (!inode){
-        LOGK("error pathname: %s, no such directory!\n", pathname);
-    }else{
-        LOGK("get %s inode!\n", pathname);
-    }
-    iput(inode);
-
-    char pathname2[] = "/d_no";
-    inode = namei(pathname2);
-    if (!inode){
-        LOGK("error pathname: %s, no such directory!\n", pathname2);
-    }else{
-        LOGK("get %s inode!\n", pathname2);
-    }
-    iput(inode);
-
-    char pathname3[] = "/home/hello.txt";
-    inode = namei(pathname3);
-    if (!inode){
-        LOGK("error pathname: %s, no such directory!\n", pathname3);
-    }else{
-        LOGK("get %s inode!\n", pathname3);
-    }
-    iput(inode);
-    
-}
-
 inode_t* named(char* pathname, char** next) {
     inode_t* inode = NULL;
     task_t* task = get_current();
@@ -274,4 +245,140 @@ inode_t* namei(char* pathname) {
     brelse(pcache);
 
     return inode;    
+}
+
+int inode_read(inode_t* inode, char* buf, u32 len, off_t offset){
+    // 只能读文件或者目录
+    assert(ISFILE(inode->desc->mode) || ISDIR(inode->desc->mode));
+
+    // 如果偏移量超过文件大小，返回 EOF
+    if (offset >= inode->desc->size){
+        return EOF;
+    } else if (len == 0){
+        return 0;
+    }
+
+    // 开始读取的位置
+    u32 begin = offset;
+    // 剩余字节数
+    u32 left = MIN(len, inode->desc->size - offset);
+    
+    // 开始分块读取
+    while (left){
+        // 找到对应的文件偏移，所在的文件块
+        idx_t nr = bmap(inode, offset / BLOCK_SIZE, false);
+        assert(nr);
+
+        // 读取文件块缓冲
+        cache_t* pcache = bread(inode->dev, nr);
+
+        // 文件块内部起始偏移量
+        u32 start = offset % BLOCK_SIZE;
+
+        // 本次需要读取的字节数
+        u32 chars = MIN(BLOCK_SIZE - start, left);
+
+        // 更新偏移量和剩余字节数
+        offset += chars;
+        left -= chars;
+
+        // 文件块中的指针
+        char* ptr = pcache->data + start;
+
+        // 拷贝内容
+        memcpy(buf, ptr, chars);
+
+        // 更新缓存位置
+        buf += chars;
+
+        // 收尾释放该块
+        brelse(pcache);
+    }
+    // 更新访问时间
+    inode->atime = sys_time();
+    // 返回读取字节数
+    return offset - begin;
+}
+
+int inode_write(inode_t* inode, char* buf, u32 len, off_t offset){
+    // 不允许写入目录，目录有其他专用方法
+    assert(ISFILE(inode->desc->mode));
+
+    // todo: 需要做空间上限管理
+    if (len + offset >= FILE_MAX_SIZE){
+        return EOF;
+    }
+
+    // 开始写入的位置
+    u32 begin = offset;
+    // 剩余字节数
+    u32 left = len;
+    
+    // 开始分块写入
+    while (left){
+        // 找到对应的文件偏移，所在的文件块，不能存在则需要创建
+        idx_t nr = bmap(inode, offset / BLOCK_SIZE, true);
+        assert(nr);
+
+        // 读取文件块缓冲
+        cache_t* pcache = bread(inode->dev, nr);
+
+        // 文件块内部起始偏移量
+        u32 start = offset % BLOCK_SIZE;
+
+        // 本次需要写入的字节数
+        u32 chars = MIN(BLOCK_SIZE - start, left);
+
+        // 更新偏移量和剩余字节数
+        offset += chars;
+        left -= chars;
+
+        // 文件块中的指针
+        char* ptr = pcache->data + start;
+
+        // 如果偏移量大于文件目前的大小，则需要更新文件大小信息
+        if (offset > inode->desc->size){
+            inode->desc->size = offset;
+            // inode->cache->dirty = true;
+        }
+
+        // 拷贝内容
+        memcpy(ptr, buf, chars);
+
+        // 更新缓存位置
+        buf += chars;
+
+        // 收尾释放该块
+        pcache->dirty = true;
+        brelse(pcache);
+    }
+    // 更新访问和修改时间
+    inode->ctime = inode->atime = sys_time();
+    inode->desc->mtime = inode->ctime; // todo： 放入iput中更新
+
+    inode->cache->dirty = true;
+    bwrite(inode->cache); // 强一致
+
+    // 返回读取字节数
+    return offset - begin;
+}
+
+
+void dir_test() {
+    char pathname[] = "/d1/d2////d3/../../../hello.txt";
+    inode_t* inode = namei(pathname);
+
+    char* buf = (char*)alloc_kpage(1);
+
+    int i = inode_read(inode, buf, BLOCK_SIZE, 0);
+
+    LOGK("file content: %s\n", buf);
+
+    memset(buf, 'A', PAGE_SIZE);
+    inode_write(inode, buf, PAGE_SIZE, 0);
+
+    memset(buf, 'B', PAGE_SIZE);
+    inode_write(inode, buf, PAGE_SIZE, PAGE_SIZE);
+
+    
 }

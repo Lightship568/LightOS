@@ -33,6 +33,7 @@ idx_t balloc(dev_t dev) {
             break;
         }
     }
+    // todo: 空间已满导致的扫描失败
     bwrite(pcache);  // 强一致
     return bit;
 }
@@ -121,7 +122,7 @@ void ifree(dev_t dev, idx_t idx) {
 }
 
 idx_t bmap(inode_t* inode, idx_t block, bool create){
-    assert(block >=0 && block < TOTAL_BLOCKS);
+    assert(block >= 0 && block < TOTAL_BLOCKS);
     // 将每一个level视作一个array，查找block偏移
     u16 index = block;
     u16* array = inode->desc->zone;
