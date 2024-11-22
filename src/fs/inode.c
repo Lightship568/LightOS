@@ -1,6 +1,7 @@
 #include <lib/debug.h>
 #include <lib/string.h>
 #include <lightos/fs.h>
+#include <lightos/stat.h>
 #include <sys/assert.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
@@ -81,7 +82,8 @@ inode_t* iget(dev_t dev, idx_t nr) {
     inode->cache = pcache;
 
     // 将缓存视为一个 inode 描述符数组，获取对应的指针。
-    inode->desc = &((inode_desc_t*)pcache->data)[(inode->nr - 1) % BLOCK_INODES];
+    inode->desc =
+        &((inode_desc_t*)pcache->data)[(inode->nr - 1) % BLOCK_INODES];
 
     inode->ctime = inode->desc->mtime;
     inode->atime = sys_time();
@@ -90,17 +92,17 @@ inode_t* iget(dev_t dev, idx_t nr) {
 }
 
 // 释放 inode
-void iput(inode_t* inode){
-    if (!inode){
+void iput(inode_t* inode) {
+    if (!inode) {
         return;
     }
-    
-    if (inode->cache->dirty){
-        bwrite(inode->cache); // 强一致
+
+    if (inode->cache->dirty) {
+        bwrite(inode->cache);  // 强一致
     }
 
     inode->count--;
-    if (inode->count){
+    if (inode->count) {
         return;
     }
 
@@ -110,8 +112,55 @@ void iput(inode_t* inode){
     put_free_inode(inode);
 }
 
-void inode_init(void){
-    for (size_t i =0 ; i < INODE_NR; ++i){
+static void inode_bfree(inode_t* inode, u16* array, int index, int level){
+    if (!array[index]){
+        return;
+    }
+
+    // 直接块直接释放
+    if (!level){
+        bfree(inode->dev, array[index]);
+        return;
+    }
+
+    cache_t* pcache = bread(inode->dev, array[index]);
+    for(size_t i = 0; i < BLOCK_INDEXES; ++i){
+        inode_bfree(inode, (u16*)pcache->data, i , level - 1);
+    }
+    brelse(pcache);
+    bfree(inode->dev, array[index]);
+}
+
+void inode_truncate(inode_t* inode) {
+    if (!ISFILE(inode->desc->mode) && !ISDIR(inode->desc->mode)) {
+        return;
+    }
+
+    // 释放直接块
+    for (size_t i = 0; i < DIRECT_BLOCKS; ++i) {
+        inode_bfree(inode, inode->desc->zone, i, 0);
+        inode->desc->zone[i] = 0;
+    }
+
+    // 释放一级间接块
+    inode_bfree(inode, inode->desc->zone, DIRECT_BLOCKS, 1);
+    inode->desc->zone[DIRECT_BLOCKS] = 0;
+
+    // 释放二级间接块
+    inode_bfree(inode, inode->desc->zone, DIRECT_BLOCKS + 1, 2);
+    inode->desc->zone[DIRECT_BLOCKS + 1] = 0;
+
+    // inode 设置
+    inode->desc->size = 0;
+    inode->desc->mtime = sys_time();
+
+    // 强一致
+    inode->cache->dirty = true;
+    bwrite(inode->cache); 
+}
+
+void inode_init(void) {
+    for (size_t i = 0; i < INODE_NR; ++i) {
         inode_t* inode = &inode_table[i];
         inode->dev = EOF;
     }
