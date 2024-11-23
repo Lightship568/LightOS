@@ -78,6 +78,8 @@ void syscall_init(void) {
     syscall_table[SYS_NR_UMASK] = sys_umask;
     syscall_table[SYS_NR_MKDIR] = sys_mkdir;
     syscall_table[SYS_NR_RMDIR] = sys_rmdir;
+    syscall_table[SYS_NR_LINK] = sys_link;
+    syscall_table[SYS_NR_UNLINK] = sys_unlink;
 
 
     DEBUGK("Syscall initialized\n");

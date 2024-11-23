@@ -404,9 +404,9 @@ int sys_mkdir(char* pathname, int mode) {
     inode->desc->nlinks = 2; // 一个是父目录的 dentry，另一个是本目录的 '.'
     inode->desc->size = sizeof(dentry_t) * 2;
 
-    // '..' 使得父目录链接数 + 1，此外修改了dir 的 dentry 需要更新 mtime
+    // '..' 使得父目录链接数 + 1
     dir->desc->nlinks++; 
-    dir->desc->mtime = inode->desc->mtime;
+    // 此外 add_entry 已经修改了 dir 的 mtime 和 dirty 位，just in case...
     dir->cache->dirty = true;
 
     // 写入 inode 目录中的默认目录项
@@ -563,6 +563,127 @@ clean:
     brelse(entry_cache);
     return ret;
 }
+
+int sys_link(char* oldname, char* newname){
+    int ret = EOF;
+    cache_t* pcache = NULL;
+    inode_t* dir = NULL;
+    inode_t* inode = namei(oldname);
+
+    if (!inode){
+        goto clean;
+    }
+    // 目录不可添加硬链接
+    if (ISDIR(inode->desc->mode)){
+        goto clean;
+    }
+
+    char* next = NULL;
+    dir = named(newname, &next);
+    if (!dir){
+        goto clean;
+    }
+    if (!(*next)){
+        goto clean;
+    }
+    // mount 的文件不可添加硬链接
+    if (dir->dev != inode->dev){
+        goto clean;
+    }
+    if (!permission(dir, P_WRITE)){
+        goto clean;
+    }
+
+    char*name = next;
+    dentry_t* entry;
+
+    pcache = find_entry(&dir, name, &next, &entry);
+    // 目录项已经存在
+    if (pcache){
+        goto clean;
+    }
+
+    // 在 newname 父目录 dir 增加 entry
+    pcache = add_entry(dir, name, &entry);
+    entry->nr = inode->nr;
+    pcache->dirty = true;
+
+    inode->desc->nlinks++;
+    inode->ctime = sys_time();
+    inode->cache->dirty = true;
+    ret = 0;
+
+clean:
+    brelse(pcache);
+    iput(dir);
+    iput(inode);
+    return ret;
+}
+
+int sys_unlink(char* filename){
+    int ret = EOF;
+    cache_t* pcache = NULL;
+    char* next = NULL;
+    inode_t* dir = named(filename, &next);
+    inode_t* inode = NULL;
+
+    if (!dir){
+        goto clean;
+    }
+    if (!(*next)){
+        goto clean;
+    }
+    if (!permission(dir, P_WRITE)){
+        goto clean;
+    }
+
+    char* name = next;
+    dentry_t* entry;
+
+    pcache = find_entry(&dir, name, &next, &entry);
+    // 目录项不存在
+    if (!pcache){
+        goto clean;
+    }
+
+    inode = iget(dir->dev, entry->nr);
+    // 目标是个目录，一定不是硬链接
+    if (ISDIR(inode->desc->mode)){
+        goto clean;
+    }
+    task_t* task = get_current();
+    if ((inode->desc->mode & ISVTX) && task->uid != inode->desc->uid){
+        goto clean;
+    }
+
+    // 这种情况应该不可能发生，但是 linux0.11 比较保守
+    // nlinks 为 0 代表之前已经被删除了，而该 nr 仍能通过某个目录的 entry 索引到，应该是个bug
+    // if (!inode->desc->nlinks){
+    //     LOGK("Deleting non exists file (%04x:%d)\n", inode->dev, inode->nr);
+    //     inode->desc->nlinks = 1;
+    // }
+    assert(inode->desc->nlinks);
+
+    entry->nr = 0;
+    pcache->dirty = true;
+
+    inode->desc->nlinks--;
+    inode->cache->dirty = true;
+
+    // 硬链接清零，删除文件并释放该文件 inode
+    if (inode->desc->nlinks == 0){
+        inode_truncate(inode);
+        ifree(inode->dev, inode->nr);
+    }
+    ret = 0;
+
+clean:
+    brelse(pcache);
+    iput(inode);
+    iput(dir);
+    return ret;
+}
+
 
 void dir_test() {
     char pathname[] = "/d1/d2////d3/../../../hello.txt";

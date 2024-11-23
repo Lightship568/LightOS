@@ -79,8 +79,13 @@ void init_uthread(void){
     mode_t mode = umask(0002);
     printf("old mode : %o\n", mode);
 
-    mkdir("/testdir", 0775);
-    rmdir("/empty");
+    // mkdir("/testdir", 0775);
+    // rmdir("/empty");
+
+    link("/hello.txt", "/world.txt");
+    unlink("/hello.txt");
+    // unlink("/world.txt");
+
     while (true){
         test();
     }

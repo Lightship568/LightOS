@@ -139,4 +139,9 @@ int sys_mkdir(char* pathname, int mode);
 // syscall: 删除目录
 int sys_rmdir(char* pathname);
 
+// syscall: 创建硬链接
+int sys_link(char* oldname, char* newname);
+// syscall: 删除硬链接
+int sys_unlink(char* filename);
+
 #endif

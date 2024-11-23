@@ -91,5 +91,7 @@ time_t time(); // return seconds from 1970.01.01
 mode_t umask(mode_t mask);
 int mkdir(char* pathname, int mode);
 int rmdir(char* pathname);
+int link(char* oldname, char* newname);
+int unlink(char* filename);
 
 #endif
