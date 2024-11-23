@@ -10,6 +10,7 @@
 #include <lightos/task.h>
 #include <sys/assert.h>
 #include <sys/types.h>
+#include <lightos/fs.h>
 
 u32 nr_syscall = NR_SYSCALL;
 handler_t syscall_table[NR_SYSCALL];
@@ -39,7 +40,7 @@ u32 sys_write(fd_t fd, char* buf, u32 len) {
 extern void dir_test(void);
 
 static u32 sys_test() {
-    dir_test();
+    // dir_test();
 
     char ch;
     device_t* device;
@@ -53,12 +54,6 @@ static u32 sys_test() {
     device_write(device->dev, &ch, 1, 0, 0);
 
     return 255;
-
-    // cache_t* pcache = bread(device->dev, 0);  // 主引导块
-    // char* data = pcache->data;
-    // memset(data, 0x5a, BLOCK_SIZE);
-    // pcache->dirty = true;
-    // brelse(pcache);
 }
 
 extern time_t sys_time();  // clock.c
@@ -81,6 +76,9 @@ void syscall_init(void) {
     syscall_table[SYS_NR_WAITPID] = sys_waitpid;
     syscall_table[SYS_NR_TIME] = sys_time;
     syscall_table[SYS_NR_UMASK] = sys_umask;
+    syscall_table[SYS_NR_MKDIR] = sys_mkdir;
+    syscall_table[SYS_NR_RMDIR] = sys_rmdir;
+
 
     DEBUGK("Syscall initialized\n");
 }

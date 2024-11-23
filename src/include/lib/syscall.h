@@ -89,5 +89,7 @@ void exit(u32 status);
 pid_t waitpid(pid_t pid, int32* status, int32 options);
 time_t time(); // return seconds from 1970.01.01
 mode_t umask(mode_t mask);
+int mkdir(char* pathname, int mode);
+int rmdir(char* pathname);
 
 #endif

@@ -78,6 +78,9 @@ void init_uthread(void){
     printf("pid %d start!\n", getpid());
     mode_t mode = umask(0002);
     printf("old mode : %o\n", mode);
+
+    mkdir("/testdir", 0775);
+    rmdir("/empty");
     while (true){
         test();
     }

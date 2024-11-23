@@ -134,5 +134,9 @@ int inode_write(inode_t* inode, char* buf, u32 len, off_t offset);
 // 释放 inode 所有文件块
 void inode_truncate(inode_t* inode);
 
+// syscall: 创建目录
+int sys_mkdir(char* pathname, int mode);
+// syscall: 删除目录
+int sys_rmdir(char* pathname);
 
 #endif

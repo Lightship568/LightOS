@@ -2537,3 +2537,30 @@ buffer_t *find_entry(inode_t **dir, const char *name, char **next, dentry_t **re
 buffer_t *add_entry(inode_t *dir, const char *name, dentry_t **result);
 ```
 
+## 创建和删除目录
+
+这部分有点复杂，从头梳理一下。
+
+创建目录的主要流程是：
+
+1. 检查：named检查父路径，next检查创建目录名称不为空，检查父目录是否有写权限，find_entry检查是否存在同名文件或目录
+2. 在父目录 zone 增加新 dentry（add_entry）
+3. ialloc 申请新 target_inode 并设置entry->nr，iget 获取到 target_inode
+4. 设置target_inode 信息，包括 mode，uid，gid，mtime，size，nlinks
+5. 设置父目录 inode 的 nlinks + 1（target_inode 下的 '..' 链接到了父目录）
+6. bmap 为 target_inode 分配 zone[0]，用于初始化目录下的 '.' 和 '..'，这里称为 target_zone
+7. bread 读取 target_zone，add_entry 写入'.' 和 '..'，分别设置entry->nr 和 name
+
+其中，比较复杂的两个问题是：需要设置谁的 pcache->dirty？nlinks 是什么情况？
+
+![image-20241123141914187](D:\Markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\image-20241123141914187.png)
+
+* 观察黑线可得，子目录 nlinks 为 2，一条来自父目录 dentry 的 new_dir，另一条来自 '.'，而父目录因子目录的 '..' 而使 nlinks +1。
+
+* 上述四个 block 的 cache 都需要设置 dirty
+  1. p_dir 由于修改了 nlinks 和 p_dentry（更新 mtime），因此设置 dirty
+  2. target_dir 新申请的，修改完信息也要设置 dirty
+  3. p_dentry 增加了 new_dir，设置dirty
+  4. t_dentry 新申请的，设置 dirty
+
+当然这个过程涉及到两个申请过程（ialloc 和 bmap 申请 target_dir 和 t_dentry），这个过程修改的位图会在这两个函数内部实现强一致。

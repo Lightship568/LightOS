@@ -1,11 +1,10 @@
 #include <lib/debug.h>
+#include <lib/stdlib.h>
 #include <lib/string.h>
 #include <lightos/fs.h>
 #include <lightos/stat.h>
 #include <sys/assert.h>
 #include <sys/types.h>
-#include <lib/string.h>
-#include <lib/stdlib.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -39,7 +38,7 @@ bool match_name(const char* name, const char* entry_name, char** next) {
     char* rhs = (char*)entry_name;
 
     // 过滤掉可能的无效分隔符，如传入"//////filename"
-    while(IS_SEPARATOR(*lhs)){
+    while (IS_SEPARATOR(*lhs)) {
         lhs++;
     }
     while (*lhs == *rhs && *lhs != EOS && *rhs != EOS) {
@@ -65,7 +64,7 @@ bool match_name(const char* name, const char* entry_name, char** next) {
  * 输出 next 是下一层级的 path，如 name 输入 a/b/c，next 返回 b/c
  * result 是找到的目标目录的 entry
  * 失败返回 NULL
- *  */ 
+ *  */
 cache_t* find_entry(inode_t** dir,
                     const char* name,
                     char** next,
@@ -124,8 +123,8 @@ cache_t* add_entry(inode_t* dir, const char* name, dentry_t** result) {
     for (; true; i++, entry++) {
         if (!pcache || (u32)entry >= (u32)pcache->data + BLOCK_SIZE) {
             brelse(pcache);
-            block = bmap(dir, i / BLOCK_DENTRIES,
-                         true);  // 创建，为可能的添加做准备
+            // 创建，为可能的添加做准备
+            block = bmap(dir, i / BLOCK_DENTRIES, true);
             assert(block);
 
             pcache = bread(dir->dev, block);
@@ -162,12 +161,12 @@ inode_t* named(char* pathname, char** next) {
 
     char* left = pathname;
     // 绝对路径与相对路径判断
-    if(IS_SEPARATOR(left[0])){
+    if (IS_SEPARATOR(left[0])) {
         inode = task->iroot;
         left++;
-    }else if (left[0]){
+    } else if (left[0]) {
         inode = task->ipwd;
-    }else{
+    } else {
         return NULL;
     }
 
@@ -175,44 +174,43 @@ inode_t* named(char* pathname, char** next) {
     *next = left;
 
     // 传入的 pathname 是空的
-    if (!*left){
+    if (!*left) {
         return inode;
     }
 
     char* right = strrsep(left);
     // 没有最后一级的分隔符了，说明已经找到了父目录 inode
-    if (!right || right < left){
+    if (!right || right < left) {
         return inode;
     }
     // 开始层级查找 inode->dentry->data
     right++;
     *next = left;
     dentry_t* entry = NULL;
-    cache_t * pcache = NULL;
-    while (true){
+    cache_t* pcache = NULL;
+    while (true) {
         // 拿到目录下的 entry 和其所在 pcache
         pcache = find_entry(&inode, left, next, &entry);
         // 任何一级没有找到，直接失败
-        if (!pcache){
+        if (!pcache) {
             iput(inode);
             goto failure;
         }
         // 切换到下一级目录
-        dev = inode->dev; // 必须更新，防止 mount 到其他设备上。
+        dev = inode->dev;  // 必须更新，防止 mount 到其他设备上。
         iput(inode);
         inode = iget(dev, entry->nr);
-        brelse(pcache); // entry 使用后才可以释放其所在的 pcache
+        brelse(pcache);  // entry 使用后才可以释放其所在的 pcache
         // 下一级非目录，或没有执行权限
-        if (!ISDIR(inode->desc->mode) || !permission(inode, P_EXEC)){
+        if (!ISDIR(inode->desc->mode) || !permission(inode, P_EXEC)) {
             goto failure;
         }
         // 找到最终目标
-        if (right == *next){
+        if (right == *next) {
             goto success;
         }
         left = *next;
     }
-
 
 success:
     return inode;
@@ -224,18 +222,18 @@ failure:
 inode_t* namei(char* pathname) {
     char* next = NULL;
     inode_t* dir = named(pathname, &next);
-    if (!dir){
+    if (!dir) {
         return NULL;
     }
     // 这种情况是传入的 pathname 以分隔符结尾
-    if (!(*next)){
+    if (!(*next)) {
         return dir;
     }
-    
+
     char* name = next;
     dentry_t* entry = NULL;
     cache_t* pcache = find_entry(&dir, name, &next, &entry);
-    if (!pcache){
+    if (!pcache) {
         iput(dir);
         return NULL;
     }
@@ -244,17 +242,17 @@ inode_t* namei(char* pathname) {
     iput(dir);
     brelse(pcache);
 
-    return inode;    
+    return inode;
 }
 
-int inode_read(inode_t* inode, char* buf, u32 len, off_t offset){
+int inode_read(inode_t* inode, char* buf, u32 len, off_t offset) {
     // 只能读文件或者目录
     assert(ISFILE(inode->desc->mode) || ISDIR(inode->desc->mode));
 
     // 如果偏移量超过文件大小，返回 EOF
-    if (offset >= inode->desc->size){
+    if (offset >= inode->desc->size) {
         return EOF;
-    } else if (len == 0){
+    } else if (len == 0) {
         return 0;
     }
 
@@ -262,9 +260,9 @@ int inode_read(inode_t* inode, char* buf, u32 len, off_t offset){
     u32 begin = offset;
     // 剩余字节数
     u32 left = MIN(len, inode->desc->size - offset);
-    
+
     // 开始分块读取
-    while (left){
+    while (left) {
         // 找到对应的文件偏移，所在的文件块
         idx_t nr = bmap(inode, offset / BLOCK_SIZE, false);
         assert(nr);
@@ -300,12 +298,12 @@ int inode_read(inode_t* inode, char* buf, u32 len, off_t offset){
     return offset - begin;
 }
 
-int inode_write(inode_t* inode, char* buf, u32 len, off_t offset){
+int inode_write(inode_t* inode, char* buf, u32 len, off_t offset) {
     // 不允许写入目录，目录有其他专用方法
     assert(ISFILE(inode->desc->mode));
 
     // todo: 需要做空间上限管理
-    if (len + offset >= FILE_MAX_SIZE){
+    if (len + offset >= FILE_MAX_SIZE) {
         return EOF;
     }
 
@@ -313,9 +311,9 @@ int inode_write(inode_t* inode, char* buf, u32 len, off_t offset){
     u32 begin = offset;
     // 剩余字节数
     u32 left = len;
-    
+
     // 开始分块写入
-    while (left){
+    while (left) {
         // 找到对应的文件偏移，所在的文件块，不能存在则需要创建
         idx_t nr = bmap(inode, offset / BLOCK_SIZE, true);
         assert(nr);
@@ -337,7 +335,7 @@ int inode_write(inode_t* inode, char* buf, u32 len, off_t offset){
         char* ptr = pcache->data + start;
 
         // 如果偏移量大于文件目前的大小，则需要更新文件大小信息
-        if (offset > inode->desc->size){
+        if (offset > inode->desc->size) {
             inode->desc->size = offset;
             // inode->cache->dirty = true;
         }
@@ -354,15 +352,217 @@ int inode_write(inode_t* inode, char* buf, u32 len, off_t offset){
     }
     // 更新访问和修改时间
     inode->ctime = inode->atime = sys_time();
-    inode->desc->mtime = inode->ctime; // todo： 放入iput中更新
+    inode->desc->mtime = inode->ctime;  // todo： 放入iput中更新
 
     inode->cache->dirty = true;
-    bwrite(inode->cache); // 强一致
+    bwrite(inode->cache);  // 强一致
 
     // 返回读取字节数
     return offset - begin;
 }
 
+int sys_mkdir(char* pathname, int mode) {
+    char* next = NULL;
+    cache_t* entry_cache = NULL;
+    inode_t* dir = named(pathname, &next);
+    char* name = next;
+    dentry_t* entry = NULL;
+
+    // 父目录不存在
+    if (!dir) {
+        goto clean;
+    }
+    // 目录名为空
+    if (!*next){
+        goto clean;
+    }
+    // 父目录无写权限
+    if (!permission(dir, P_WRITE)){
+        goto clean;
+    }
+
+    entry_cache = find_entry(&dir, name, &next, &entry);
+    // 已经存在同名目录或文件
+    if (entry_cache){
+        goto clean;
+    }
+
+    // 在父 inode zone 下新增目录项
+    entry_cache = add_entry(dir, name, &entry);
+    entry_cache->dirty = true;
+    entry->nr = ialloc(dir->dev);
+
+    task_t* task = get_current();
+    
+    // 拿到新增的目录 inode
+    inode_t* inode = iget(dir->dev, entry->nr);
+    inode->cache->dirty = true;
+    inode->desc->gid = task->gid;
+    inode->desc->uid = task->uid;
+    inode->desc->mode = (mode & 0777 & ~task->umask) | IFDIR;
+    inode->desc->mtime = sys_time();
+    inode->desc->nlinks = 2; // 一个是父目录的 dentry，另一个是本目录的 '.'
+    inode->desc->size = sizeof(dentry_t) * 2;
+
+    // '..' 使得父目录链接数 + 1，此外修改了dir 的 dentry 需要更新 mtime
+    dir->desc->nlinks++; 
+    dir->desc->mtime = inode->desc->mtime;
+    dir->cache->dirty = true;
+
+    // 写入 inode 目录中的默认目录项
+    cache_t* zone_cache = bread(inode->dev, bmap(inode, 0, true));
+    zone_cache->dirty = true;
+
+    entry = (dentry_t*)zone_cache->data;
+    strcpy(entry->name, ".");
+    entry->nr = inode->nr;
+
+    entry++;
+    strcpy(entry->name, "..");
+    entry->nr = dir->nr;
+
+    // 释放两个 inode 和 两个 cache
+    iput(inode);
+    iput(dir);
+
+    brelse(zone_cache);
+    brelse(entry_cache);
+
+    return 0;
+
+clean:
+    // 清理 inode 和 可能的 entry_cache
+    iput(dir);
+    brelse(entry_cache);
+    return EOF;
+}
+
+// 删除目录前需要保证目录内容是空的
+static bool is_dir_empty(inode_t* inode){
+    assert(ISDIR(inode->desc->mode));
+    int entries = inode->desc->size / sizeof(dentry_t);
+    if (entries < 2 || !inode->desc->zone[0]){
+        LOGK("Error! Bad directory on dev %d\n", inode->dev);
+        return false;
+    }
+
+    idx_t i = 0;
+    idx_t block = 0;
+    cache_t* pcache = NULL;
+    dentry_t* entry = NULL;
+    int count = 0;
+
+    // 依次读取每个 entry，检查 nr 是否为 0
+    for (; i < entries; i++, entry++){
+        if (!pcache || (u32)entry >= (u32)pcache->data + BLOCK_SIZE){
+            brelse(pcache);
+            block = bmap(inode, 1 / BLOCK_DENTRIES, false);
+            assert(block);
+
+            pcache = bread(inode->dev, block);
+            entry = (dentry_t*)pcache->data;
+        }
+        if (entry->nr){
+            count++;
+        }
+    }
+
+    brelse(pcache);
+    if (count < 2){
+        LOGK("Error! Bad directory on dev %d\n", inode->dev);
+        return false;
+    }
+    return count == 2;
+}
+
+int sys_rmdir(char* pathname) {
+    char* next = NULL;
+    cache_t* entry_cache = NULL;
+    inode_t* dir = named(pathname, &next);
+    inode_t* inode = NULL;
+    char* name = next;
+    dentry_t* entry = NULL;
+    int ret = EOF;
+
+    // 父目录不存在
+    if (!dir) {
+        goto clean;
+    }
+    // 目录名为空
+    if (!*next){
+        goto clean;
+    }
+    // 目录为'.'或'..'
+    if (!strcmp(name, ".") || !strcmp(name, "..")){
+        goto clean;
+    }
+    // 父目录无写权限
+    if (!permission(dir, P_WRITE)){
+        goto clean;
+    }
+
+    
+
+    entry_cache = find_entry(&dir, name, &next, &entry);
+    // 目录项不存在
+    if (!entry_cache){
+        goto clean;
+    }
+
+    inode = iget(dir->dev, entry->nr);
+    assert(inode);
+
+    // 目录没有硬链接，并且校验了'..'，因此下面的情况应该不会发生
+    assert(inode != dir);
+
+    if (!ISDIR(inode->desc->mode)){
+        goto clean;
+    }
+
+    task_t* task = get_current();
+    // 受限删除且删除用户非目录拥有者
+    if ((dir->desc->mode & ISVTX) && task->uid != inode->desc->uid){
+        goto clean;
+    }
+
+    // mount 目录，或引用计数不为 0
+    if (dir->dev != inode->dev || inode->count > 1){
+        goto clean;
+    }
+
+    // 目录必须为空
+    if (!is_dir_empty(inode)){
+        goto clean;
+    }
+
+    assert(inode->desc->nlinks == 2);
+
+    // 释放 inode 和 dentry
+    inode_truncate(inode);
+    ifree(inode->dev, inode->nr);
+
+    inode->cache->dirty = true;
+    inode->desc->nlinks = 0;
+    inode->nr = 0;
+
+    // 父目录修改
+    dir->desc->nlinks--;
+    dir->ctime = dir->atime = dir->desc->mtime = sys_time();
+    dir->cache->dirty = true;
+    assert(dir->desc->nlinks > 0); // 根目录只有'.'指向自己，因此 nlinks >= 1
+
+    entry->nr = 0;
+    entry_cache->dirty = true;
+
+    ret = 0;    
+
+clean:
+    // 清理
+    iput(inode);
+    iput(dir);
+    brelse(entry_cache);
+    return ret;
+}
 
 void dir_test() {
     char pathname[] = "/d1/d2////d3/../../../hello.txt";
@@ -370,6 +570,4 @@ void dir_test() {
 
     inode_truncate(inode);
     iput(inode);
-
-    
 }

@@ -50,6 +50,7 @@ fs: $(BUILD)/LightOS.img $(BUILD)/slave.img
 # 切换所有者
 	sudo chown ${USER} $(MNT_PATH)
 # 创建目录
+	mkdir -p $(MNT_PATH)/empty
 	mkdir -p $(MNT_PATH)/home
 	mkdir -p $(MNT_PATH)/d1/d2/d3/d4
 #创建文件
