@@ -98,6 +98,9 @@ void syscall_init(void) {
     syscall_table[SYS_NR_RMDIR] = sys_rmdir;
     syscall_table[SYS_NR_LINK] = sys_link;
     syscall_table[SYS_NR_UNLINK] = sys_unlink;
+    syscall_table[SYS_NR_OPEN] = sys_open;
+    syscall_table[SYS_NR_CREAT] = sys_creat;
+    syscall_table[SYS_NR_CLOSE] = sys_close;
 
 
     DEBUGK("Syscall initialized\n");

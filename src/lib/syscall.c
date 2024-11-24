@@ -1,6 +1,6 @@
 #include <lib/syscall.h>
-#include <sys/assert.h>
-#include <lightos/task.h>
+// #include <sys/assert.h>
+// #include <lightos/task.h>
 
 // ebx，ecx，edx，esi，edi
 // intel 不采用栈传递系统调用参数
@@ -107,4 +107,16 @@ int link(char* oldname, char* newname){
 
 int unlink(char* filename){
     return _syscall1(SYS_NR_UNLINK, (u32)filename);
+}
+
+fd_t open(char* filename, int flags, int mode){
+    return _syscall3(SYS_NR_OPEN, (u32)filename, (u32)flags, (u32)mode);
+}
+
+fd_t creat(char* filename, int mode){
+    return _syscall2(SYS_NR_CREAT, (u32)filename, (u32)mode);
+}
+
+void close(fd_t fd){
+    _syscall1(SYS_NR_CLOSE, (u32)fd);
 }

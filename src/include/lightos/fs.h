@@ -180,7 +180,11 @@ int sys_unlink(char* filename);
 void file_init(void);
 // 从 file_table 获取一个空的文件指针
 file_t* get_file(void);
-// 释放文件
+// 释放文件，减少 inode 引用计数，iput 释放（与 inode_open 对应）
 void put_file(file_t* file);
+// syscall open/creat/close
+fd_t sys_open(char* filename, int flags, int mode);
+fd_t sys_creat(char* filename, int mode); 
+void sys_close(fd_t fd);
 
 #endif

@@ -8,6 +8,7 @@
 #include <lib/string.h>
 #include <lib/print.h>
 #include <lib/bitmap.h>
+#include <lightos/fs.h>
 
 void init_uthread(void);
 
@@ -76,6 +77,11 @@ void init_uthread(void){
     int pid;
     int status;
     printf("pid %d start!\n", getpid());
+
+    fd_t fd = open("/world.txt", O_CREAT | O_RDWR, 0755);
+    // char buf[] = "this is a test write to world.txt";
+    // write(fd, buf, sizeof(buf));
+    close(fd);
 
     while (true){
         test();

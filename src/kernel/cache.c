@@ -112,7 +112,8 @@ static cache_t* get_free_cache(){
 cache_t* getblk(dev_t dev, idx_t block) {
     cache_t* pcache = get_from_hash_table(dev, block);
     if (pcache) {
-        assert(pcache->valid);
+        // assert(pcache->valid); // 哈希表中存的并不一定都有效，在 bread 中判断
+        pcache->count++;
         return pcache;
     }
     pcache = get_free_cache();
@@ -130,14 +131,22 @@ cache_t* bread(dev_t dev, idx_t block) {
     cache_t* pcache = getblk(dev, block);
     assert(pcache != NULL);
     if (pcache->valid){
-        pcache->count++;
         return pcache;
     }
 
-    device_request(pcache->dev, pcache->data, BLOCK_SECS, pcache->block * BLOCK_SECS, 0, REQUEST_READ);
+    // device_request 支持多线程，但是 cache 不能。
+    // 防止多进程同时操作一块 cache
+    mutex_lock(&pcache->lock);
+
+    // 若其他线程已经读取完成，此处 valid 将被置位
+    if(!pcache->valid){
+        device_request(pcache->dev, pcache->data, BLOCK_SECS, pcache->block * BLOCK_SECS, 0, REQUEST_READ);
+        pcache->dirty = false;
+        pcache->valid = true;
+    }
     
-    pcache->dirty = false;
-    pcache->valid = true;
+    mutex_unlock(&pcache->lock);
+    
     return pcache;
 }
 
