@@ -78,13 +78,25 @@ void init_uthread(void){
     int status;
     printf("pid %d start!\n", getpid());
 
-    fd_t fd = open("/world.txt", O_CREAT | O_RDWR, 0755);
-    // char buf[] = "this is a test write to world.txt";
-    // write(fd, buf, sizeof(buf));
+    int len;
+    char buf[128];
+    memset(buf, 0, sizeof(buf));
+
+    fd_t fd = open("/hello.txt", O_CREAT | O_RDWR, 0755);
+    len = read(fd, buf, sizeof(buf));
+    printf("read %d bytes from fd %d\n", len, fd);
+    printf("content: %s\n", buf);
+
+    fd = open("/world.txt", O_CREAT | O_RDWR, 0755);
+    memset(buf, 'A', sizeof(buf));
+    len = write(fd, buf, sizeof(buf));
+    printf("write %d bytes to fd %d\n", len, fd);
     close(fd);
 
+    char ch;
     while (true){
-        test();
+        read(stdin, &ch, 1);
+        write(stdout, &ch, 1);
     }
 }
 

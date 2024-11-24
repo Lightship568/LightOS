@@ -29,48 +29,7 @@ u32 sys_default(u32 vector,
     return -1;
 }
 
-extern int32 console_write(void* dev, char* buf, u32 count);
-u32 sys_write(fd_t fd, char* buf, u32 len) {
-    if (fd == stdout) {
-        return console_write(NULL, buf, len);
-    }
-    return -1;
-}
-
-extern void dir_test(void);
-
-static u32 sys_test() {
-    
-    inode_t*inode = inode_open("/hello.txt", O_RDWR | O_CREAT, 0755);
-    assert(inode);
-
-    char* buf = (char*)alloc_kpage(1);
-    int i = inode_read(inode, buf, 1024, 0);
-    printk("file conten: %s\n", buf);
-
-    memset(buf, 'A', 4096);
-    inode_write(inode, buf, 4096, 0);
-    iput(inode);
-
-    inode = inode_open("/create.txt", O_RDWR | O_CREAT, 0755);
-    assert(inode);
-
-    buf = (char*)alloc_kpage(1);
-    memset(buf, 'B', 4096);
-    inode_write(inode, buf, 4096, 0);
-    iput(inode);
-
-    char ch;
-    device_t* device;
-
-    device = device_find(DEV_KEYBOARD, 0);
-    assert(device);
-    device_read(device->dev, &ch, 1, 0, 0);
-
-    device = device_find(DEV_CONSOLE, 0);
-    assert(device);
-    device_write(device->dev, &ch, 1, 0, 0);
-
+static u32 sys_test(void) {
     return 255;
 }
 
@@ -85,6 +44,7 @@ void syscall_init(void) {
     syscall_table[SYS_NR_TEST] = sys_test;
     syscall_table[SYS_NR_YIELD] = sys_yield;
     syscall_table[SYS_NR_SLEEP] = sys_sleep;
+    syscall_table[SYS_NR_READ] = sys_read;
     syscall_table[SYS_NR_WRITE] = sys_write;
     syscall_table[SYS_NR_BRK] = sys_brk;
     syscall_table[SYS_NR_GETPID] = sys_getpid;

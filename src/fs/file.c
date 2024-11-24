@@ -2,6 +2,7 @@
 #include <lightos/fs.h>
 #include <lightos/task.h>
 #include <sys/assert.h>
+#include <lightos/device.h>
 
 // 全系统最大同时打开文件数
 #define FILE_NR 128
@@ -67,6 +68,57 @@ void sys_close(fd_t fd){
     put_file(file); // --count => iput
     task_put_fd(task, fd);
 }
+
+int32 sys_read(fd_t fd, char *buf, u32 len){
+    if (fd == stdin){
+        device_t* device = device_find(DEV_KEYBOARD, 0);
+        return device_read(device->dev, buf, len ,0, 0);
+    }else if (fd == stdout || fd == stderr){
+        return EOF;
+    }
+
+    task_t* task = get_current();
+    file_t* file = task->files[fd];
+    assert(file);
+    assert(len > 0);
+    // 仅写入，不可读
+    if ((file->flags & O_ACCMODE) == O_WRONLY){
+        return EOF;
+    }
+    inode_t* inode = file->inode;
+    len = inode_read(inode, buf, len, file->offset);
+    // 读取成功，增加文件偏移
+    if(len != EOF){
+        file->offset += len;
+    }
+    return len;    
+}
+
+int32 sys_write(fd_t fd, char *buf, u32 len) {
+    if (fd == stdout || fd == stderr) {
+        device_t* device = device_find(DEV_CONSOLE, 0);
+        return device_write(device->dev, buf, len ,0, 0);
+    }else if (fd == stdin){
+        return EOF;
+    }
+
+    task_t* task = get_current();
+    file_t* file = task->files[fd];
+    assert(file);
+    assert(len > 0);
+    // 仅读取，不可写
+    if ((file->flags & O_ACCMODE) == O_RDONLY){
+        return EOF;
+    }
+    inode_t* inode = file->inode;
+    len = inode_write(inode, buf, len, file->offset);
+    // 写入成功，增加文件偏移
+    if(len != EOF){
+        file->offset += len;
+    }
+    return len;    
+}
+
 
 void file_init(void) {
     memset(file_table, 0, sizeof(file_table));
