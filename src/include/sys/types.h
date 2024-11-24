@@ -52,7 +52,7 @@ typedef u32 dev_t;
 
 typedef u16 mode_t;
 
-typedef int32 fd_t;
+typedef int32 fd_t; // 文件描述符索引，负值表示错误码
 typedef enum std_fd_t{
     stdin,
     stdout,

@@ -2,8 +2,8 @@
 #define LIGHTOS_FS_H
 
 #include <lib/list.h>
-#include <sys/types.h>
 #include <lightos/cache.h>
+#include <sys/types.h>
 
 // defined in cache.h
 // #define BLOCK_SIZE 1024  // 块大小
@@ -27,26 +27,27 @@
 #define BLOCK_INODES (BLOCK_SIZE / sizeof(inode_desc_t))  // 块 inode 数量
 #define BLOCK_DENTRIES (BLOCK_SIZE / sizeof(dentry_t))    // 块 dentry 数量
 
-#define DIRECT_BLOCKS (7)                          // 直接块数量
+#define DIRECT_BLOCKS (7)                         // 直接块数量
 #define BLOCK_INDEXES (BLOCK_SIZE / sizeof(u16))  // 块索引数量
 #define INDIRECT1_BLOCKS BLOCK_INDEXES            // 一级间接块数量
-#define INDIRECT2_BLOCKS (INDIRECT1_BLOCKS * INDIRECT1_BLOCKS)  // 二级间接块数量
+#define INDIRECT2_BLOCKS \
+    (INDIRECT1_BLOCKS * INDIRECT1_BLOCKS)  // 二级间接块数量
 
-#define TOTAL_BLOCKS (DIRECT_BLOCKS + INDIRECT1_BLOCKS + INDIRECT2_BLOCKS)  // 全部块数量
-#define FILE_MAX_SIZE (TOTAL_BLOCKS * BLOCK_SIZE) // 文件最大大小（256MB）
+#define TOTAL_BLOCKS \
+    (DIRECT_BLOCKS + INDIRECT1_BLOCKS + INDIRECT2_BLOCKS)  // 全部块数量
+#define FILE_MAX_SIZE (TOTAL_BLOCKS * BLOCK_SIZE)  // 文件最大大小（256MB）
 
-enum file_flag
-{
-    O_RDONLY = 00,      // 只读方式
-    O_WRONLY = 01,      // 只写方式
-    O_RDWR = 02,        // 读写方式
-    O_ACCMODE = 03,     // 文件访问模式屏蔽码
-    O_CREAT = 00100,    // 如果文件不存在就创建
-    O_EXCL = 00200,     // 独占使用文件标志
-    O_NOCTTY = 00400,   // 不分配控制终端
-    O_TRUNC = 01000,    // 若文件已存在且是写操作，则长度截为 0
-    O_APPEND = 02000,   // 以添加方式打开，文件指针置为文件尾
-    O_NONBLOCK = 04000, // 非阻塞方式打开和操作文件
+enum file_flag {
+    O_RDONLY = 00,     // 只读方式
+    O_WRONLY = 01,     // 只写方式
+    O_RDWR = 02,       // 读写方式
+    O_ACCMODE = 03,    // 文件访问模式屏蔽码
+    O_CREAT = 00100,   // 如果文件不存在就创建
+    O_EXCL = 00200,    // 独占使用文件标志
+    O_NOCTTY = 00400,  // 不分配控制终端
+    O_TRUNC = 01000,   // 若文件已存在且是写操作，则长度截为 0
+    O_APPEND = 02000,  // 以添加方式打开，文件指针置为文件尾
+    O_NONBLOCK = 04000,  // 非阻塞方式打开和操作文件
 };
 
 typedef struct inode_desc_t {
@@ -101,12 +102,21 @@ typedef struct dentry_t {
     char name[14];  // 文件名
 } dentry_t;
 
+typedef struct file_t {
+    inode_t* inode;  // 文件 inode
+    u32 count;       // 引用计数
+    off_t offset;    // 文件偏移
+    int flags;       // 文件标记
+    int mode;        // 文件模式
+} file_t;
+
 // 获取设备 dev 的超级块
 super_block_t* get_super(dev_t dev);
 // 读设备 dev 的超级块
 super_block_t* read_super(dev_t dev);
 // 初始化
 void super_init(void);
+void inode_init(void);
 
 // 分配一个文件块
 idx_t balloc(dev_t dev);
@@ -129,11 +139,14 @@ inode_t* iget(dev_t dev, idx_t nr);
 void iput(inode_t* inode);
 
 // 判断文件名是否相等
-bool match_name(const char *name, const char *entry_name, char **next);
+bool match_name(const char* name, const char* entry_name, char** next);
 // 获取 dir 目录下的 name 目录 所在的 dentry_t 和 cache_t
-cache_t *find_entry(inode_t **dir, const char *name, char **next, dentry_t **result);
+cache_t* find_entry(inode_t** dir,
+                    const char* name,
+                    char** next,
+                    dentry_t** result);
 // 在 dir 目录中添加 name 目录项
-cache_t *add_entry(inode_t *dir, const char *name, dentry_t **result);
+cache_t* add_entry(inode_t* dir, const char* name, dentry_t** result);
 
 // 获取父目录 inode
 inode_t* named(char* pathname, char** next);
@@ -160,5 +173,14 @@ int sys_link(char* oldname, char* newname);
 // syscall: 删除硬链接
 int sys_unlink(char* filename);
 
+
+// 文件相关
+
+// 初始化
+void file_init(void);
+// 从 file_table 获取一个空的文件指针
+file_t* get_file(void);
+// 释放文件
+void put_file(file_t* file);
 
 #endif

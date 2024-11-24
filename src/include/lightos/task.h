@@ -14,7 +14,10 @@
 #define KERNEL_RING0 0
 #define USER_RING3 1000
 
+// 进程名最大长度
 #define TASK_NAME_LEN 16
+// 进程打开文件的最大数量
+#define TASK_FILE_NR 16
 
 // onix 最终版 task_struct
 // typedef struct task_t
@@ -68,26 +71,27 @@ typedef enum task_state_t {
 
 // PCB
 typedef struct task_t {
-    u32* stack;                // 内核栈
-    task_state_t state;        // 任务状态
-    u32 priority;              // 任务优先级
-    u32 ticks;                 // 剩余时间片
-    u32 jiffies;               // 上次执行时全局时间片
-    pid_t pid;                 // 任务ID
-    pid_t ppid;                // 父任务ID
-    char name[TASK_NAME_LEN];  // 任务名
-    u32 uid;                   // 用户ID
-    u32 gid;                   // 组ID
-    u32 pde;                   // 页目录物理地址
-    list_node_t node;          // 链表
-    struct bitmap_t* vmap;     // 进程虚拟内存位图
-    tss_t tss;                 // TSS
-    u32 brk;                   // 进程堆内存最高地址
-    int32 status;              // 进程特殊状态
-    pid_t waitpid;             // 进程等待的 pid
-    struct inode_t* ipwd;      // 进程当前目录 inode
-    struct inode_t* iroot;     // 进程根目录 inode
-    u16 umask;                  // 进程用户权限
+    u32* stack;                          // 内核栈
+    task_state_t state;                  // 任务状态
+    u32 priority;                        // 任务优先级
+    u32 ticks;                           // 剩余时间片
+    u32 jiffies;                         // 上次执行时全局时间片
+    pid_t pid;                           // 任务ID
+    pid_t ppid;                          // 父任务ID
+    char name[TASK_NAME_LEN];            // 任务名
+    u32 uid;                             // 用户ID
+    u32 gid;                             // 组ID
+    u32 pde;                             // 页目录物理地址
+    list_node_t node;                    // 链表
+    struct bitmap_t* vmap;               // 进程虚拟内存位图
+    tss_t tss;                           // TSS
+    u32 brk;                             // 进程堆内存最高地址
+    int32 status;                        // 进程特殊状态
+    pid_t waitpid;                       // 进程等待的 pid
+    struct inode_t* ipwd;                // 进程当前目录 inode
+    struct inode_t* iroot;               // 进程根目录 inode
+    u16 umask;                           // 进程用户权限
+    struct file_t* files[TASK_FILE_NR];  // 进程文件表
     u32 magic;  // 检测内核栈溢出（溢出到 PCB 就寄了）
 } task_t;
 

@@ -114,6 +114,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/fs/inode.o 		\
 	$(BUILD)/kernel/system.o 	\
 	$(BUILD)/fs/namei.o 		\
+	$(BUILD)/fs/file.o 			\
 
 	$(shell mkdir -p $(dir $@))
 	ld ${LDFLAGS} $^ -o $@
