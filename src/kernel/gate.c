@@ -40,7 +40,25 @@ u32 sys_write(fd_t fd, char* buf, u32 len) {
 extern void dir_test(void);
 
 static u32 sys_test() {
-    // dir_test();
+    
+    inode_t*inode = inode_open("/hello.txt", O_RDWR | O_CREAT, 0755);
+    assert(inode);
+
+    char* buf = (char*)alloc_kpage(1);
+    int i = inode_read(inode, buf, 1024, 0);
+    printk("file conten: %s\n", buf);
+
+    memset(buf, 'A', 4096);
+    inode_write(inode, buf, 4096, 0);
+    iput(inode);
+
+    inode = inode_open("/create.txt", O_RDWR | O_CREAT, 0755);
+    assert(inode);
+
+    buf = (char*)alloc_kpage(1);
+    memset(buf, 'B', 4096);
+    inode_write(inode, buf, 4096, 0);
+    iput(inode);
 
     char ch;
     device_t* device;

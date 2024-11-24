@@ -35,6 +35,20 @@
 #define TOTAL_BLOCKS (DIRECT_BLOCKS + INDIRECT1_BLOCKS + INDIRECT2_BLOCKS)  // 全部块数量
 #define FILE_MAX_SIZE (TOTAL_BLOCKS * BLOCK_SIZE) // 文件最大大小（256MB）
 
+enum file_flag
+{
+    O_RDONLY = 00,      // 只读方式
+    O_WRONLY = 01,      // 只写方式
+    O_RDWR = 02,        // 读写方式
+    O_ACCMODE = 03,     // 文件访问模式屏蔽码
+    O_CREAT = 00100,    // 如果文件不存在就创建
+    O_EXCL = 00200,     // 独占使用文件标志
+    O_NOCTTY = 00400,   // 不分配控制终端
+    O_TRUNC = 01000,    // 若文件已存在且是写操作，则长度截为 0
+    O_APPEND = 02000,   // 以添加方式打开，文件指针置为文件尾
+    O_NONBLOCK = 04000, // 非阻塞方式打开和操作文件
+};
+
 typedef struct inode_desc_t {
     u16 mode;  // 文件类型和属性(rwx 位)
     u16 uid;   // 用户id（文件拥有者标识符）
@@ -126,6 +140,8 @@ inode_t* named(char* pathname, char** next);
 // 获取目标 inode
 inode_t* namei(char* pathname);
 
+// 打开文件，返回 inode
+inode_t* inode_open(char* pathname, int flag, int mode);
 // 从 inode 的 offset 处，读 len 个字节 到 buf
 int inode_read(inode_t* inode, char* buf, u32 len, off_t offset);
 // 从 inode 的 ofsset 处，将 buf 的 len 个字节写入磁盘
@@ -143,5 +159,6 @@ int sys_rmdir(char* pathname);
 int sys_link(char* oldname, char* newname);
 // syscall: 删除硬链接
 int sys_unlink(char* filename);
+
 
 #endif

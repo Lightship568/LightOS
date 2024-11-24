@@ -245,6 +245,80 @@ inode_t* namei(char* pathname) {
     return inode;
 }
 
+inode_t* inode_open(char* pathname, int flag, int mode) {
+    inode_t* dir = NULL;
+    inode_t* inode = NULL;
+    cache_t* pcache = NULL;
+    dentry_t* entry = NULL;
+    char* next = NULL;
+
+    // 错误的请求：截断+只读
+    if ((flag & O_TRUNC) && ((flag & O_ACCMODE) == O_RDONLY)) {
+        goto clean;
+    }
+
+    dir = named(pathname, &next);
+    if (!dir) {
+        goto clean;
+    }
+    if (!*next) {
+        goto clean;
+    }
+
+    char* name = next;
+    pcache = find_entry(&dir, name, &next, &entry);
+    // 找到该文件
+    if (pcache) {
+        inode = iget(dir->dev, entry->nr);
+        if (ISDIR(inode->desc->mode) || !permission(inode, flag & O_ACCMODE)) {
+            goto clean;
+        }
+        goto makeup;
+    }
+
+    // 没有该文件且不创建
+    if (!(flag & O_CREAT)) {
+        goto clean;
+    }
+
+    // 准备创建该文件
+    if (!permission(dir, P_WRITE)) {
+        goto clean;
+    }
+
+    // 添加新目录项，申请并获取新文件 inode
+    pcache = add_entry(dir, name, &entry);
+    entry->nr = ialloc(dir->dev);
+    inode = iget(dir->dev, entry->nr);
+
+    // 设置 inode
+    task_t* task = get_current();
+    mode &= (0777 & ~task->umask);
+    mode |= IFREG;
+
+    inode->desc->uid = task->uid;
+    inode->desc->gid = task->gid;
+    inode->desc->mode = mode;
+    inode->ctime = inode->desc->mtime = sys_time();
+    inode->desc->nlinks = 1;
+    inode->desc->size = 0;
+    inode->cache->dirty = true;
+
+makeup:
+    if (flag & O_TRUNC) {
+        inode_truncate(inode);
+    }
+    brelse(pcache);
+    iput(dir);
+    return inode;
+
+clean:
+    brelse(pcache);
+    iput(inode);
+    iput(dir);
+    return NULL;
+}
+
 int inode_read(inode_t* inode, char* buf, u32 len, off_t offset) {
     // 只能读文件或者目录
     assert(ISFILE(inode->desc->mode) || ISDIR(inode->desc->mode));
@@ -373,17 +447,17 @@ int sys_mkdir(char* pathname, int mode) {
         goto clean;
     }
     // 目录名为空
-    if (!*next){
+    if (!*next) {
         goto clean;
     }
     // 父目录无写权限
-    if (!permission(dir, P_WRITE)){
+    if (!permission(dir, P_WRITE)) {
         goto clean;
     }
 
     entry_cache = find_entry(&dir, name, &next, &entry);
     // 已经存在同名目录或文件
-    if (entry_cache){
+    if (entry_cache) {
         goto clean;
     }
 
@@ -393,7 +467,7 @@ int sys_mkdir(char* pathname, int mode) {
     entry->nr = ialloc(dir->dev);
 
     task_t* task = get_current();
-    
+
     // 拿到新增的目录 inode
     inode_t* inode = iget(dir->dev, entry->nr);
     inode->cache->dirty = true;
@@ -401,11 +475,11 @@ int sys_mkdir(char* pathname, int mode) {
     inode->desc->uid = task->uid;
     inode->desc->mode = (mode & 0777 & ~task->umask) | IFDIR;
     inode->desc->mtime = sys_time();
-    inode->desc->nlinks = 2; // 一个是父目录的 dentry，另一个是本目录的 '.'
+    inode->desc->nlinks = 2;  // 一个是父目录的 dentry，另一个是本目录的 '.'
     inode->desc->size = sizeof(dentry_t) * 2;
 
     // '..' 使得父目录链接数 + 1
-    dir->desc->nlinks++; 
+    dir->desc->nlinks++;
     // 此外 add_entry 已经修改了 dir 的 mtime 和 dirty 位，just in case...
     dir->cache->dirty = true;
 
@@ -438,10 +512,10 @@ clean:
 }
 
 // 删除目录前需要保证目录内容是空的
-static bool is_dir_empty(inode_t* inode){
+static bool is_dir_empty(inode_t* inode) {
     assert(ISDIR(inode->desc->mode));
     int entries = inode->desc->size / sizeof(dentry_t);
-    if (entries < 2 || !inode->desc->zone[0]){
+    if (entries < 2 || !inode->desc->zone[0]) {
         LOGK("Error! Bad directory on dev %d\n", inode->dev);
         return false;
     }
@@ -453,8 +527,8 @@ static bool is_dir_empty(inode_t* inode){
     int count = 0;
 
     // 依次读取每个 entry，检查 nr 是否为 0
-    for (; i < entries; i++, entry++){
-        if (!pcache || (u32)entry >= (u32)pcache->data + BLOCK_SIZE){
+    for (; i < entries; i++, entry++) {
+        if (!pcache || (u32)entry >= (u32)pcache->data + BLOCK_SIZE) {
             brelse(pcache);
             block = bmap(inode, 1 / BLOCK_DENTRIES, false);
             assert(block);
@@ -462,13 +536,13 @@ static bool is_dir_empty(inode_t* inode){
             pcache = bread(inode->dev, block);
             entry = (dentry_t*)pcache->data;
         }
-        if (entry->nr){
+        if (entry->nr) {
             count++;
         }
     }
 
     brelse(pcache);
-    if (count < 2){
+    if (count < 2) {
         LOGK("Error! Bad directory on dev %d\n", inode->dev);
         return false;
     }
@@ -489,23 +563,21 @@ int sys_rmdir(char* pathname) {
         goto clean;
     }
     // 目录名为空
-    if (!*next){
+    if (!*next) {
         goto clean;
     }
     // 目录为'.'或'..'
-    if (!strcmp(name, ".") || !strcmp(name, "..")){
+    if (!strcmp(name, ".") || !strcmp(name, "..")) {
         goto clean;
     }
     // 父目录无写权限
-    if (!permission(dir, P_WRITE)){
+    if (!permission(dir, P_WRITE)) {
         goto clean;
     }
 
-    
-
     entry_cache = find_entry(&dir, name, &next, &entry);
     // 目录项不存在
-    if (!entry_cache){
+    if (!entry_cache) {
         goto clean;
     }
 
@@ -515,23 +587,23 @@ int sys_rmdir(char* pathname) {
     // 目录没有硬链接，并且校验了'..'，因此下面的情况应该不会发生
     assert(inode != dir);
 
-    if (!ISDIR(inode->desc->mode)){
+    if (!ISDIR(inode->desc->mode)) {
         goto clean;
     }
 
     task_t* task = get_current();
     // 受限删除且删除用户非目录拥有者
-    if ((dir->desc->mode & ISVTX) && task->uid != inode->desc->uid){
+    if ((dir->desc->mode & ISVTX) && task->uid != inode->desc->uid) {
         goto clean;
     }
 
     // mount 目录，或引用计数不为 0
-    if (dir->dev != inode->dev || inode->count > 1){
+    if (dir->dev != inode->dev || inode->count > 1) {
         goto clean;
     }
 
     // 目录必须为空
-    if (!is_dir_empty(inode)){
+    if (!is_dir_empty(inode)) {
         goto clean;
     }
 
@@ -549,12 +621,12 @@ int sys_rmdir(char* pathname) {
     dir->desc->nlinks--;
     dir->ctime = dir->atime = dir->desc->mtime = sys_time();
     dir->cache->dirty = true;
-    assert(dir->desc->nlinks > 0); // 根目录只有'.'指向自己，因此 nlinks >= 1
+    assert(dir->desc->nlinks > 0);  // 根目录只有'.'指向自己，因此 nlinks >= 1
 
     entry->nr = 0;
     entry_cache->dirty = true;
 
-    ret = 0;    
+    ret = 0;
 
 clean:
     // 清理
@@ -564,42 +636,42 @@ clean:
     return ret;
 }
 
-int sys_link(char* oldname, char* newname){
+int sys_link(char* oldname, char* newname) {
     int ret = EOF;
     cache_t* pcache = NULL;
     inode_t* dir = NULL;
     inode_t* inode = namei(oldname);
 
-    if (!inode){
+    if (!inode) {
         goto clean;
     }
     // 目录不可添加硬链接
-    if (ISDIR(inode->desc->mode)){
+    if (ISDIR(inode->desc->mode)) {
         goto clean;
     }
 
     char* next = NULL;
     dir = named(newname, &next);
-    if (!dir){
+    if (!dir) {
         goto clean;
     }
-    if (!(*next)){
+    if (!(*next)) {
         goto clean;
     }
     // mount 的文件不可添加硬链接
-    if (dir->dev != inode->dev){
+    if (dir->dev != inode->dev) {
         goto clean;
     }
-    if (!permission(dir, P_WRITE)){
+    if (!permission(dir, P_WRITE)) {
         goto clean;
     }
 
-    char*name = next;
+    char* name = next;
     dentry_t* entry;
 
     pcache = find_entry(&dir, name, &next, &entry);
     // 目录项已经存在
-    if (pcache){
+    if (pcache) {
         goto clean;
     }
 
@@ -620,20 +692,20 @@ clean:
     return ret;
 }
 
-int sys_unlink(char* filename){
+int sys_unlink(char* filename) {
     int ret = EOF;
     cache_t* pcache = NULL;
     char* next = NULL;
     inode_t* dir = named(filename, &next);
     inode_t* inode = NULL;
 
-    if (!dir){
+    if (!dir) {
         goto clean;
     }
-    if (!(*next)){
+    if (!(*next)) {
         goto clean;
     }
-    if (!permission(dir, P_WRITE)){
+    if (!permission(dir, P_WRITE)) {
         goto clean;
     }
 
@@ -642,23 +714,23 @@ int sys_unlink(char* filename){
 
     pcache = find_entry(&dir, name, &next, &entry);
     // 目录项不存在
-    if (!pcache){
+    if (!pcache) {
         goto clean;
     }
 
     inode = iget(dir->dev, entry->nr);
     // 目标是个目录，一定不是硬链接
-    if (ISDIR(inode->desc->mode)){
+    if (ISDIR(inode->desc->mode)) {
         goto clean;
     }
     task_t* task = get_current();
-    if ((inode->desc->mode & ISVTX) && task->uid != inode->desc->uid){
+    if ((inode->desc->mode & ISVTX) && task->uid != inode->desc->uid) {
         goto clean;
     }
 
     // 这种情况应该不可能发生，但是 linux0.11 比较保守
-    // nlinks 为 0 代表之前已经被删除了，而该 nr 仍能通过某个目录的 entry 索引到，应该是个bug
-    // if (!inode->desc->nlinks){
+    // nlinks 为 0 代表之前已经被删除了，而该 nr 仍能通过某个目录的 entry
+    // 索引到，应该是个bug if (!inode->desc->nlinks){
     //     LOGK("Deleting non exists file (%04x:%d)\n", inode->dev, inode->nr);
     //     inode->desc->nlinks = 1;
     // }
@@ -671,7 +743,7 @@ int sys_unlink(char* filename){
     inode->cache->dirty = true;
 
     // 硬链接清零，删除文件并释放该文件 inode
-    if (inode->desc->nlinks == 0){
+    if (inode->desc->nlinks == 0) {
         inode_truncate(inode);
         ifree(inode->dev, inode->nr);
     }
@@ -683,7 +755,6 @@ clean:
     iput(dir);
     return ret;
 }
-
 
 void dir_test() {
     char pathname[] = "/d1/d2////d3/../../../hello.txt";
