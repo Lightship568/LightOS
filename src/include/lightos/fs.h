@@ -110,6 +110,12 @@ typedef struct file_t {
     int mode;        // 文件模式
 } file_t;
 
+typedef enum whence_t {
+    SEEK_SET = 1,  // 直接设置偏移
+    SEEK_CUR,      // 当前位置偏移
+    SEEK_END       // 结束位置偏移
+} whence_t;
+
 // 获取设备 dev 的超级块
 super_block_t* get_super(dev_t dev);
 // 读设备 dev 的超级块
@@ -173,7 +179,6 @@ int sys_link(char* oldname, char* newname);
 // syscall: 删除硬链接
 int sys_unlink(char* filename);
 
-
 // 文件相关
 
 // 初始化
@@ -184,10 +189,12 @@ file_t* get_file(void);
 void put_file(file_t* file);
 // syscall open/creat/close
 fd_t sys_open(char* filename, int flags, int mode);
-fd_t sys_creat(char* filename, int mode); 
+fd_t sys_creat(char* filename, int mode);
 void sys_close(fd_t fd);
 // syscall: read/write
-int32 sys_read(fd_t fd, char *buf, u32 len);
-int32 sys_write(fd_t fd, char *buf, u32 len);
+int32 sys_read(fd_t fd, char* buf, u32 len);
+int32 sys_write(fd_t fd, char* buf, u32 len);
+// syscall: lseek
+int32 sys_lseek(fd_t fd, off_t offset, whence_t whence);
 
 #endif

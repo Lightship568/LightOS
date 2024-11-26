@@ -2603,6 +2603,29 @@ buffer_t *add_entry(inode_t *dir, const char *name, dentry_t **result);
 2. **VFS（虚拟文件系统）层**：标准输入输出最终映射到具体的文件对象（如 TTY 设备文件、管道等），通过 VFS 统一管理。
 3. **TTY 子系统**：如果标准输入输出绑定到 TTY 设备，内核通过 TTY 子系统处理用户输入输出。
 
+## lseek
+
+有三种设置类型
+
+```c
+typedef enum whence_t {
+    SEEK_SET = 1,  // 直接设置偏移
+    SEEK_CUR,      // 当前位置偏移
+    SEEK_END       // 结束位置偏移
+} whence_t;
+```
+
+此外发现，read 类型并不会在字符缓冲区末尾补 0，所以接 printf 可能会导致栈泄露等问题，需要在读取时指定 size(buf) - 1，并手动补 0。
+
+```c
+char buf[1024];
+int n = read(fd, buf, sizeof(buf) - 1);
+if (n > 0) {
+    buf[n] = '\0';  // 确保字符串结束
+    printf("%s", buf);
+}
+```
+
 
 
 
