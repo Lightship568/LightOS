@@ -97,11 +97,11 @@ refind:
 }
 
 void kfree(void *ptr) {
+    if (!ptr) return;
+
     // 传入的ptr是buf实际位置，不是buf指针位置（偏移0x4，buf没啥用）
     arena_t* parena = (arena_t*)(ptr - sizeof(arena_t));
 
-    if (!ptr) return;
-    
     // overflow magic check
     if (parena->forward_ptr && parena->forward_ptr->magic != ARENA_MAGIC){
         printk("parena: 0x%p\n", parena);

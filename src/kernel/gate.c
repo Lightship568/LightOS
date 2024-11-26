@@ -62,6 +62,9 @@ void syscall_init(void) {
     syscall_table[SYS_NR_CREAT] = sys_creat;
     syscall_table[SYS_NR_CLOSE] = sys_close;
     syscall_table[SYS_NR_LSEEK] = sys_lseek;
+    syscall_table[SYS_NR_GETCWD] = sys_getcwd;
+    syscall_table[SYS_NR_CHDIR] = sys_chdir;
+    syscall_table[SYS_NR_CHROOT] = sys_chroot;
 
 
     DEBUGK("Syscall initialized\n");

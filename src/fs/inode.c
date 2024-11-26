@@ -72,7 +72,13 @@ inode_t* iget(dev_t dev, idx_t nr) {
     inode = get_free_inode();
     inode->dev = dev;
     inode->nr = nr;
-    inode->count = 1;
+    // task_初始化 idle+init 的 iroot+ipwd 导致根 inode 已经增加了四个引用计数
+    if (inode == get_root_inode()){
+        assert(inode->count == 4);
+    }else{
+        assert(inode->count == 0);
+        inode->count = 1;
+    }
 
     // 加入超级块 inode 链表
     list_push(&sb->inode_list, &inode->node);
@@ -163,5 +169,6 @@ void inode_init(void) {
     for (size_t i = 0; i < INODE_NR; ++i) {
         inode_t* inode = &inode_table[i];
         inode->dev = EOF;
+        inode->count = 0;
     }
 }

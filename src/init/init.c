@@ -78,25 +78,12 @@ extern int printf(const char* fmt, ...);
 void init_uthread(void) {
     printf("pid %d start!\n", getpid());
 
-    char buf[10];
+    chroot("../..//d1/././/././//../d1////");
+    chdir("/////////d2/./d3/..");
 
-    memset(buf, 'A', sizeof(buf));
-    fd_t fd;
-    int len = 0;
-
-    fd = open("/hello.txt", O_RDWR, 0755);
-    lseek(fd, 5, SEEK_SET);
-    len = write(fd, buf, sizeof(buf));
-    close(fd);
-
-    memset(buf, 0, sizeof(buf));
-    fd = open("/hello.txt", O_RDONLY, 0755);
-    len = read(fd, buf, sizeof(buf) - 1);
-    if (len > 0) {
-        buf[len] = '\0';
-    }
-    printf("content: %s", buf);
-    close(fd);
+    char buf[1024];
+    getcwd(buf, sizeof(buf));
+    printf(buf);
 
     char ch;
     while (true) {

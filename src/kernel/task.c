@@ -13,6 +13,7 @@
 #include <sys/assert.h>
 #include <sys/global.h>
 #include <sys/types.h>
+#include <lib/arena.h>
 
 extern void init_kthread(void);
 
@@ -163,9 +164,14 @@ pid_t task_create(void (*eip_ptr)(void),
     task->uid = uid;
     task->gid = 0;  // todo: group
     task->brk = 0;
-    task->iroot = get_root_inode();
-    task->ipwd = task->iroot;
+    task->iroot = task->ipwd = get_root_inode();
     task->umask = 0022;  // 0755
+    task->iroot->count += 2;
+
+    task->pwd_len = 1;
+    task->pwd = (char*)kmalloc(task->pwd_len);
+    task->pwd[0] = '/';
+
     task->magic = LIGHTOS_MAGIC;
 
     task->tss.eip = (u32)eip_ptr;
@@ -281,6 +287,23 @@ u32 sys_fork() {
     child->vmap->bits = (void*)alloc_kpage(1);
     memcpy(child->vmap->bits, task->vmap->bits, PAGE_SIZE);
 
+    // 拷贝 pwd
+    child->pwd = kmalloc(task->pwd_len);
+    child->pwd_len = task->pwd_len;
+    memcpy(child->pwd, task->pwd, task->pwd_len);
+
+    // 工作目录引用计数
+    task->ipwd->count++;
+    task->iroot->count++;
+
+    // 文件引用计数
+    for(size_t i = 0; i < TASK_FILE_NR; ++i){
+        file_t* file = child->files[i];
+        if (file){
+            file->count++;
+        }
+    }
+
     // 不需要手动修改其他寄存器，中断上下文保存了寄存器状态，复制内核栈就可以自动恢复了
 
     child->tss.eip = (u32) && child_task;
@@ -328,6 +351,20 @@ u32 sys_exit(u32 status) {
     free_kpage((u32)task->vmap->bits, 1);
     // 释放vmap
     kfree(task->vmap);
+    // 释放 pwd
+    kfree(task->pwd);
+
+    // 引用计数释放
+    iput(task->ipwd);
+    iput(task->iroot);
+
+    for(size_t i = 0; i< TASK_FILE_NR; ++i){
+        file_t* file = task->files[i];
+        if (file){ // fd: 0,1,2 初始化时默认清零
+            sys_close(i);
+        }
+    }
+
 
     for (size_t i = 0; i < NR_TASKS; ++i) {
         if (!task_list[i])

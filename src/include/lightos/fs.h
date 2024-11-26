@@ -37,6 +37,8 @@
     (DIRECT_BLOCKS + INDIRECT1_BLOCKS + INDIRECT2_BLOCKS)  // 全部块数量
 #define FILE_MAX_SIZE (TOTAL_BLOCKS * BLOCK_SIZE)  // 文件最大大小（256MB）
 
+#define MAX_PATH_LEN 4096 // 最大路径长度
+
 enum file_flag {
     O_RDONLY = 00,     // 只读方式
     O_WRONLY = 01,     // 只写方式
@@ -196,5 +198,9 @@ int32 sys_read(fd_t fd, char* buf, u32 len);
 int32 sys_write(fd_t fd, char* buf, u32 len);
 // syscall: lseek
 int32 sys_lseek(fd_t fd, off_t offset, whence_t whence);
+// syscall: getcwd/chdir/chroot
+int32 sys_getcwd(char* buf, size_t size);
+int32 sys_chdir(char* pathname);
+int32 sys_chroot(char* pathname);
 
 #endif

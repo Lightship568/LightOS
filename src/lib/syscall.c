@@ -116,5 +116,17 @@ void close(fd_t fd) {
 }
 
 int lseek(fd_t fd, off_t offset, int whence) {
-    _syscall3(SYS_NR_LSEEK, (u32)fd, (u32)offset, (u32)whence);
+    return _syscall3(SYS_NR_LSEEK, (u32)fd, (u32)offset, (u32)whence);
+}
+
+int getcwd(char* buf, size_t size){
+    return _syscall2(SYS_NR_GETCWD, (u32)buf, (u32)size);
+}
+
+int chdir(char* pathname){
+    return _syscall1(SYS_NR_CHDIR, (u32)pathname);
+}
+
+int chroot(char* pathname){
+    return _syscall1(SYS_NR_CHROOT, (u32)pathname);
 }

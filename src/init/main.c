@@ -36,16 +36,17 @@ void kernel_init(void) {
     rtc_init();
 
     syscall_init();
-    task_init();
 
     aerna_init();
-    kmap_init();
+
+    inode_init(); // 文件系统 inode 初始化
+    task_init(); // task 中增加了 idle 和 init 的 iroot & ipwd （四个引用计数），inode 初始化要提前
+    kmap_init(); // kmap init 中存在 get_current, 须位于 task_init 后
 
     ide_init();         // 硬盘驱动初始化
     page_cache_init();  // 缓冲初始化
     file_init();
 
-    inode_init(); // 文件系统 inode 初始化
     super_init(); // 文件系统超级块初始化
 
     idle();  // set stack & sti

@@ -3,6 +3,9 @@
 #include <lightos/fs.h>
 #include <lightos/task.h>
 #include <sys/assert.h>
+#include <lib/arena.h>
+#include <lib/stdlib.h>
+#include <lightos/stat.h>
 
 // 全系统最大同时打开文件数
 #define FILE_NR 128
@@ -57,7 +60,9 @@ fd_t sys_creat(char* filename, int mode) {
 }
 
 void sys_close(fd_t fd) {
-    assert(fd >= 3);
+    if (fd < 3) {
+        return;
+    }
     assert(fd < TASK_FILE_NR);
     task_t* task = get_current();
     file_t* file = task->files[fd];
@@ -153,6 +158,134 @@ int32 sys_lseek(fd_t fd, off_t offset, whence_t whence) {
             break;
     }
 
+    return ret;
+}
+
+int32 sys_getcwd(char* buf, size_t size) {
+    task_t* task = get_current();
+    strncpy(buf, task->pwd, MIN(task->pwd_len + 1, size));
+    return task->pwd_len;
+}
+
+// 处理复杂路径字符串，并转换为绝对路径
+static char* abspath(char* pathname, u32 pathname_len) {
+    task_t* task = get_current();
+    char* tmpstr;
+    // 相对路径，将绝对路径补齐
+    if (!IS_SEPARATOR(pathname[0])) {
+        pathname_len = task->pwd_len + pathname_len + 3;  // 补充 2*'/' + EOS
+        tmpstr = kmalloc(pathname_len);
+        strcpy(tmpstr, task->pwd);
+        tmpstr[task->pwd_len] = SEPARATOR1;
+        strcpy(&tmpstr[task->pwd_len + 1], pathname);
+        tmpstr[pathname_len - 2] = SEPARATOR1;
+        tmpstr[pathname_len - 1] = EOS;
+    }
+    // 绝对路径，直接处理
+    else {
+        pathname_len += 2;
+        tmpstr = kmalloc(pathname_len);
+        strcpy(tmpstr, pathname);
+        tmpstr[pathname_len - 2] = SEPARATOR1;
+        tmpstr[pathname_len - 1] = EOS;
+    }
+    assert(IS_SEPARATOR(tmpstr[0]));
+    char* t = tmpstr;  // truth
+    char* c = tmpstr;  // current
+    while (c[1] != EOS) {
+        if (IS_SEPARATOR(c[1])) {
+            c++;
+        } else if (c[1] == '.' && IS_SEPARATOR(c[2])) {
+            c += 2;
+        } else if (c[1] == '.' && c[2] == '.' && IS_SEPARATOR(c[3])) {
+            c += 3;
+            while (t > tmpstr && !IS_SEPARATOR(*(--t)))
+                ;
+        } else {
+            while (!IS_SEPARATOR(c[1])) {
+                *(++t) = *(++c);
+            }
+            *(++t) = SEPARATOR1;
+        }
+    }
+    if (t > tmpstr) {
+        *t = EOS;
+    } else {
+        *(++t) = EOS;
+    }
+    return tmpstr;
+}
+
+int32 sys_chdir(char* pathname) {
+    u32 pathname_len = strlen(pathname);
+    assert(pathname_len < MAX_PATH_LEN);
+    if (pathname_len < 1) {  // 至少一个字符
+        return EOF;
+    }
+
+    int ret = 0;
+    // todo: 若传入相对路径，可以优化 namei 相对路径查询更快
+    char* tmpstr = abspath(pathname, pathname_len);
+    pathname_len = strlen(tmpstr);
+
+    task_t* task = get_current();
+    inode_t* inode = namei(tmpstr);
+    if (!inode) {
+        ret = EOF;
+        goto clean;
+    }
+    if (!ISDIR(inode->desc->mode) || inode == task->ipwd){
+        ret = EOF;
+        goto clean;
+    }
+
+    iput(task->ipwd);
+    task->ipwd = inode;
+    task->pwd_len = pathname_len;
+    // 申请更长的 pwd
+    if (task->pwd_len < pathname_len) {
+        kfree(task->pwd);
+        task->pwd = kmalloc(pathname_len);
+    }
+
+    memcpy(task->pwd, tmpstr, pathname_len);
+    kfree(tmpstr);
+    return 0;
+
+clean:
+    kfree(tmpstr);
+    iput(inode);
+    return ret;
+}
+int32 sys_chroot(char* pathname) {
+    u32 pathname_len = strlen(pathname);
+    assert(pathname_len < MAX_PATH_LEN);
+    if (pathname_len < 1) {  // 至少一个字符
+        return EOF;
+    }
+
+    int ret = 0;
+    char* tmpstr = abspath(pathname, pathname_len);
+    pathname_len = strlen(tmpstr);
+
+    task_t* task = get_current();
+    inode_t* inode = namei(tmpstr);
+    kfree(tmpstr);
+    if (!inode) {
+        ret = EOF;
+        goto clean;
+    }
+    if (!ISDIR(inode->desc->mode) || inode == task->ipwd){
+        ret = EOF;
+        goto clean;
+    }
+
+    iput(task->iroot);
+    task->iroot = inode;
+    return ret;
+
+clean:
+    iput(inode);
     return ret;
 }
 

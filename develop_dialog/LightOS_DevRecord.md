@@ -2626,6 +2626,65 @@ if (n > 0) {
 }
 ```
 
+## 目录处理
+
+* getcwd
+* chdir
+* chroot
+
+需要处理复杂字符串，如多重相对引用、多重分隔符、回退根节点等。有种久违的写算法的感觉，写了差不多一小时，不知道有无 bug。
+
+```c
+// 处理复杂路径字符串，并转换为绝对路径
+static char* abspath(char* pathname, u32 pathname_len) {
+    task_t* task = get_current();
+    char* tmpstr;
+    // 相对路径，将绝对路径补齐
+    if (!IS_SEPARATOR(pathname[0])) {
+        pathname_len = task->pwd_len + pathname_len + 3;  // 补充 2*'/' + EOS
+        tmpstr = kmalloc(pathname_len);
+        strcpy(tmpstr, task->pwd);
+        tmpstr[task->pwd_len] = SEPARATOR1;
+        strcpy(&tmpstr[task->pwd_len + 1], pathname);
+        tmpstr[pathname_len - 2] = SEPARATOR1;
+        tmpstr[pathname_len - 1] = EOS;
+    }
+    // 绝对路径，直接处理
+    else {
+        pathname_len += 2;
+        tmpstr = kmalloc(pathname_len);
+        strcpy(tmpstr, pathname);
+        tmpstr[pathname_len - 2] = SEPARATOR1;
+        tmpstr[pathname_len - 1] = EOS;
+    }
+    assert(IS_SEPARATOR(tmpstr[0]));
+    char* t = tmpstr;  // truth
+    char* c = tmpstr;  // current
+    while (c[1] != EOS) {
+        if (IS_SEPARATOR(c[1])) {
+            c++;
+        } else if (c[1] == '.' && IS_SEPARATOR(c[2])) {
+            c += 2;
+        } else if (c[1] == '.' && c[2] == '.' && IS_SEPARATOR(c[3])) {
+            c += 3;
+            while (t > tmpstr && !IS_SEPARATOR(*(--t)))
+                ;
+        } else {
+            while (!IS_SEPARATOR(c[1])) {
+                *(++t) = *(++c);
+            }
+            *(++t) = SEPARATOR1;
+        }
+    }
+    if (t > tmpstr) {
+        *t = EOS;
+    } else {
+        *(++t) = EOS;
+    }
+    return tmpstr;
+}
+```
+
 
 
 
