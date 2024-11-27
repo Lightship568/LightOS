@@ -130,3 +130,7 @@ int chdir(char* pathname){
 int chroot(char* pathname){
     return _syscall1(SYS_NR_CHROOT, (u32)pathname);
 }
+
+int readdir(fd_t fd, void* dir, int count){
+    return _syscall3(SYS_NR_READDIR, (u32)fd, (u32)dir, (u32)count);
+}

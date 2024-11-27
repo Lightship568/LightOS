@@ -61,6 +61,11 @@ $(BUILD)/fs/%.o: $(SRC)/fs/%.c
 	$(shell mkdir -p $(dir $@))
 	gcc $(CFLAGS) $(DEBUG) $(INCLUDE) -c $< -o $@
 
+# buildroot (*.c)
+$(BUILD)/buildroot/%.o: $(SRC)/buildroot/%.c
+	$(shell mkdir -p $(dir $@))
+	gcc $(CFLAGS) $(DEBUG) $(INCLUDE) -c $< -o $@
+
 # lib (*.asm)
 $(BUILD)/lib/%.o: $(SRC)/lib/%.asm
 	$(shell mkdir -p $(dir $@))
@@ -115,6 +120,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/system.o 	\
 	$(BUILD)/fs/namei.o 		\
 	$(BUILD)/fs/file.o 			\
+	$(BUILD)/buildroot/lsh.o	\
 
 	$(shell mkdir -p $(dir $@))
 	ld ${LDFLAGS} $^ -o $@

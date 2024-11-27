@@ -74,21 +74,18 @@ void move_to_user_mode(void) {
 }
 
 extern int printf(const char* fmt, ...);
+extern void lsh_main(void);
 
 void init_uthread(void) {
-    printf("pid %d start!\n", getpid());
-
-    chroot("../..//d1/././/././//../d1////");
-    chdir("/////////d2/./d3/..");
-
-    char buf[1024];
-    getcwd(buf, sizeof(buf));
-    printf(buf);
-
-    char ch;
     while (true) {
-        read(stdin, &ch, 1);
-        write(stdout, &ch, 1);
+        u32 status;
+        pid_t pid = fork();
+        if (pid){
+            pid_t child = waitpid(pid, &status, -1);
+            printf("wait pid %d status %d %d\n", child, status, time());
+        }else{
+            lsh_main();
+        }
     }
 }
 

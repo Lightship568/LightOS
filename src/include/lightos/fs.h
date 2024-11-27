@@ -104,6 +104,8 @@ typedef struct dentry_t {
     char name[14];  // 文件名
 } dentry_t;
 
+typedef dentry_t dirent_t;
+
 typedef struct file_t {
     inode_t* inode;  // 文件 inode
     u32 count;       // 引用计数
@@ -202,5 +204,7 @@ int32 sys_lseek(fd_t fd, off_t offset, whence_t whence);
 int32 sys_getcwd(char* buf, size_t size);
 int32 sys_chdir(char* pathname);
 int32 sys_chroot(char* pathname);
+// syscall: readdir。本质上就是将目录 inode 作为一个文件打开和读取 dentry
+int32 sys_readdir(fd_t fd, void* dir, int count);
 
 #endif

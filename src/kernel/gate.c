@@ -65,6 +65,7 @@ void syscall_init(void) {
     syscall_table[SYS_NR_GETCWD] = sys_getcwd;
     syscall_table[SYS_NR_CHDIR] = sys_chdir;
     syscall_table[SYS_NR_CHROOT] = sys_chroot;
+    syscall_table[SYS_NR_READDIR] = sys_readdir;
 
 
     DEBUGK("Syscall initialized\n");

@@ -75,13 +75,15 @@ void sys_close(fd_t fd) {
 }
 
 int32 sys_read(fd_t fd, char* buf, u32 len) {
+    if (fd < 0 || fd >= TASK_FILE_NR){
+        return EOF;
+    }
     if (fd == stdin) {
         device_t* device = device_find(DEV_KEYBOARD, 0);
         return device_read(device->dev, buf, len, 0, 0);
     } else if (fd == stdout || fd == stderr) {
         return EOF;
     }
-
     task_t* task = get_current();
     file_t* file = task->files[fd];
     assert(file);
@@ -163,8 +165,9 @@ int32 sys_lseek(fd_t fd, off_t offset, whence_t whence) {
 
 int32 sys_getcwd(char* buf, size_t size) {
     task_t* task = get_current();
-    strncpy(buf, task->pwd, MIN(task->pwd_len + 1, size));
-    return task->pwd_len;
+    int len = MIN(task->pwd_len + 1, size);
+    strncpy(buf, task->pwd, len);
+    return len;
 }
 
 // 处理复杂路径字符串，并转换为绝对路径
@@ -234,8 +237,12 @@ int32 sys_chdir(char* pathname) {
         ret = EOF;
         goto clean;
     }
-    if (!ISDIR(inode->desc->mode) || inode == task->ipwd){
+    if (!ISDIR(inode->desc->mode)){
         ret = EOF;
+        goto clean;
+    }
+    // 本目录无需切换
+    if (inode == task->ipwd){
         goto clean;
     }
 
@@ -287,6 +294,10 @@ int32 sys_chroot(char* pathname) {
 clean:
     iput(inode);
     return ret;
+}
+
+int32 sys_readdir(fd_t fd, void* dir, int count){
+    return sys_read(fd, (char*)dir, count);
 }
 
 void file_init(void) {

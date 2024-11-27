@@ -101,5 +101,6 @@ int lseek(fd_t, off_t offset, int whence);
 int getcwd(char* buf, size_t size);
 int chdir(char* pathname);
 int chroot(char* pathname);
+int readdir(fd_t fd, void* dir, int count);
 
 #endif

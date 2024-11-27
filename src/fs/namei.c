@@ -159,6 +159,10 @@ inode_t* named(char* pathname, char** next) {
     task_t* task = get_current();
     dev_t dev;
 
+    if (!pathname){
+        goto failure;
+    }
+
     char* left = pathname;
     // 绝对路径与相对路径判断
     if (IS_SEPARATOR(left[0])) {
@@ -262,7 +266,8 @@ inode_t* inode_open(char* pathname, int flag, int mode) {
         goto clean;
     }
     if (!*next) {
-        goto clean;
+        // 传入空 pathname，打开的是 cwd（如单独的 "ls" 命令）
+        return dir;
     }
 
     char* name = next;
@@ -270,7 +275,11 @@ inode_t* inode_open(char* pathname, int flag, int mode) {
     // 找到该文件
     if (pcache) {
         inode = iget(dir->dev, entry->nr);
-        if (ISDIR(inode->desc->mode) || !permission(inode, flag & O_ACCMODE)) {
+        if (!permission(inode, flag & O_ACCMODE)){
+            goto makeup;
+        }
+        // 目录可以只读 open
+        if (ISDIR(inode->desc->mode) && ((flag & O_ACCMODE) != O_RDONLY)) {
             goto clean;
         }
         goto makeup;
