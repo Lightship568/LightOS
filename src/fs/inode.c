@@ -165,6 +165,23 @@ void inode_truncate(inode_t* inode) {
     bwrite(inode->cache); 
 }
 
+inode_t* new_inode(dev_t dev, idx_t nr){
+    task_t* task = get_current();
+    inode_t* inode = iget(dev, nr);
+    assert(inode->desc->nlinks == 0);
+
+    inode->cache->dirty = true;
+
+    inode->desc->mode = 0777 & (~task->umask);
+    inode->desc->uid = task->uid;
+    inode->desc->size = 0;
+    inode->desc->mtime = inode->atime = sys_time();
+    inode->desc->gid = task->gid;
+    inode->desc->nlinks = 1;
+
+    return inode;
+}
+
 void inode_init(void) {
     for (size_t i = 0; i < INODE_NR; ++i) {
         inode_t* inode = &inode_table[i];

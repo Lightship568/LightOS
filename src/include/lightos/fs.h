@@ -147,6 +147,8 @@ inode_t* get_root_inode();
 inode_t* iget(dev_t dev, idx_t nr);
 // 释放 inode
 void iput(inode_t* inode);
+// iget 的简单封装，获取新的 inode 并填写基本配置
+inode_t* new_inode(dev_t dev, idx_t nr);
 
 // 判断文件名是否相等
 bool match_name(const char* name, const char* entry_name, char** next);
@@ -183,7 +185,9 @@ int sys_link(char* oldname, char* newname);
 // syscall: 删除硬链接
 int sys_unlink(char* filename);
 
-// 文件相关
+/****************************************************
+ * 文件相关
+ ****************************************************/ 
 
 // 初始化
 void file_init(void);
@@ -206,5 +210,14 @@ int32 sys_chdir(char* pathname);
 int32 sys_chroot(char* pathname);
 // syscall: readdir。本质上就是将目录 inode 作为一个文件打开和读取 dentry
 int32 sys_readdir(fd_t fd, void* dir, int count);
+
+/****************************************************
+ * 设备相关
+ ****************************************************/ 
+
+// 文件系统设备初始化
+void dev_init(void);
+// syscall: mknod 创建设备文件
+int32 sys_mknod(char* filename, int mode, int dev);
 
 #endif

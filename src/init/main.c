@@ -49,5 +49,8 @@ void kernel_init(void) {
 
     super_init(); // 文件系统超级块初始化
 
+    // 一切设备皆文件--文件系统设备初始化
+    dev_init();
+
     idle();  // set stack & sti
 }

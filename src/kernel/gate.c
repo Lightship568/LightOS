@@ -68,6 +68,7 @@ void syscall_init(void) {
     syscall_table[SYS_NR_READDIR] = sys_readdir;
     syscall_table[SYS_NR_STAT] = sys_stat;
     syscall_table[SYS_NR_FSTAT] = sys_fstat;
+    syscall_table[SYS_NR_MKNOD] = sys_mknod;
 
 
     DEBUGK("Syscall initialized\n");

@@ -207,7 +207,9 @@ static void builtin_ls(int argc, char* argv[]) {
             }
 
             stat_t statbuf;
-            if(stat(dir->name, &statbuf) < 0){
+            char pathstr[MAX_CMD_LEN + NAME_LEN];
+            sprintf(pathstr, "%s/%s", argv[i], dir->name);
+            if(stat(pathstr, &statbuf) < 0){
                 printf("ls: error checking stat of %s\n", dir->name);
                 continue;
             }

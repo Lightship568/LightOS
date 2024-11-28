@@ -121,7 +121,8 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/fs/namei.o 		\
 	$(BUILD)/fs/file.o 			\
 	$(BUILD)/buildroot/lsh.o	\
-	$(BUILD)/fs/stat.o	\
+	$(BUILD)/fs/stat.o			\
+	$(BUILD)/fs/dev.o			\
 
 	$(shell mkdir -p $(dir $@))
 	ld ${LDFLAGS} $^ -o $@

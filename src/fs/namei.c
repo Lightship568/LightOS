@@ -298,20 +298,13 @@ inode_t* inode_open(char* pathname, int flag, int mode) {
     // 添加新目录项，申请并获取新文件 inode
     pcache = add_entry(dir, name, &entry);
     entry->nr = ialloc(dir->dev);
-    inode = iget(dir->dev, entry->nr);
+    inode = new_inode(dir->dev, entry->nr);
 
     // 设置 inode
     task_t* task = get_current();
     mode &= (0777 & ~task->umask);
     mode |= IFREG;
-
-    inode->desc->uid = task->uid;
-    inode->desc->gid = task->gid;
     inode->desc->mode = mode;
-    inode->ctime = inode->desc->mtime = sys_time();
-    inode->desc->nlinks = 1;
-    inode->desc->size = 0;
-    inode->cache->dirty = true;
 
 makeup:
     if (flag & O_TRUNC) {
@@ -478,12 +471,8 @@ int sys_mkdir(char* pathname, int mode) {
     task_t* task = get_current();
 
     // 拿到新增的目录 inode
-    inode_t* inode = iget(dir->dev, entry->nr);
-    inode->cache->dirty = true;
-    inode->desc->gid = task->gid;
-    inode->desc->uid = task->uid;
+    inode_t* inode = new_inode(dir->dev, entry->nr);
     inode->desc->mode = (mode & 0777 & ~task->umask) | IFDIR;
-    inode->desc->mtime = sys_time();
     inode->desc->nlinks = 2;  // 一个是父目录的 dentry，另一个是本目录的 '.'
     inode->desc->size = sizeof(dentry_t) * 2;
 
@@ -755,6 +744,51 @@ int sys_unlink(char* filename) {
     if (inode->desc->nlinks == 0) {
         inode_truncate(inode);
         ifree(inode->dev, inode->nr);
+    }
+    ret = 0;
+
+clean:
+    brelse(pcache);
+    iput(inode);
+    iput(dir);
+    return ret;
+}
+
+int32 sys_mknod(char*filename, int mode, int dev){
+    char* next = NULL;
+    inode_t* dir = NULL;
+    cache_t* pcache = NULL;
+    inode_t* inode = NULL;
+    int ret = EOF;
+
+    dir = named(filename, &next);
+    if (!dir){
+        goto clean;
+    }
+    if (!*next){
+        goto clean;
+    }
+    if (!permission(dir, P_WRITE)){
+        goto clean;
+    }
+
+    char*name = next;
+    dentry_t* entry;
+    pcache = find_entry(&dir, name, &next, &entry);
+    // 目录项已经存在
+    if (pcache){    
+        goto clean;
+    }
+
+    pcache = add_entry(dir, name, &entry);
+    pcache->dirty = true;
+    entry->nr = ialloc(dir->dev);
+
+    inode = new_inode(dir->dev, entry->nr);
+    inode->desc->mode = mode;
+    
+    if (ISBLK(mode) || ISCHR(mode)){
+        inode->desc->zone[0] = dev;
     }
     ret = 0;
 
