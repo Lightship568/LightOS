@@ -71,4 +71,8 @@ typedef struct stat_t {
     time_t ctime;  // 最后节点修改时间
 } stat_t;
 
+// syscall：stat & fstat。通过文件名或 fd 获取文件信息
+u32 sys_stat(char* filename, stat_t* statbuf);
+u32 sys_fstat(fd_t fd, stat_t* statbuf);
+
 #endif

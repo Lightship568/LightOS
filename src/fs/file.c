@@ -102,6 +102,9 @@ int32 sys_read(fd_t fd, char* buf, u32 len) {
 }
 
 int32 sys_write(fd_t fd, char* buf, u32 len) {
+    if (fd <= 0 || fd >= TASK_FILE_NR){
+        return EOF;
+    }
     if (fd == stdout || fd == stderr) {
         device_t* device = device_find(DEV_CONSOLE, 0);
         return device_write(device->dev, buf, len, 0, 0);
@@ -127,12 +130,16 @@ int32 sys_write(fd_t fd, char* buf, u32 len) {
 }
 
 int32 sys_lseek(fd_t fd, off_t offset, whence_t whence) {
-    assert(fd < TASK_FILE_NR);
+    if (fd <= stderr || fd >= TASK_FILE_NR){
+        return EOF;
+    }
     task_t* task = get_current();
     file_t* file = task->files[fd];
     int ret = EOF;
 
-    assert(file);
+    if (!file){
+        return EOF;
+    }
     // 个人认为下面这句没必要，只有打开的文件才会有 file，不需要 inode 判断
     // assert(file->inode);
 

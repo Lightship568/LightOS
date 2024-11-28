@@ -119,18 +119,26 @@ int lseek(fd_t fd, off_t offset, int whence) {
     return _syscall3(SYS_NR_LSEEK, (u32)fd, (u32)offset, (u32)whence);
 }
 
-int getcwd(char* buf, size_t size){
+int getcwd(char* buf, size_t size) {
     return _syscall2(SYS_NR_GETCWD, (u32)buf, (u32)size);
 }
 
-int chdir(char* pathname){
+int chdir(char* pathname) {
     return _syscall1(SYS_NR_CHDIR, (u32)pathname);
 }
 
-int chroot(char* pathname){
+int chroot(char* pathname) {
     return _syscall1(SYS_NR_CHROOT, (u32)pathname);
 }
 
-int readdir(fd_t fd, void* dir, int count){
+int readdir(fd_t fd, void* dir, int count) {
     return _syscall3(SYS_NR_READDIR, (u32)fd, (u32)dir, (u32)count);
+}
+
+int stat(char* filename, stat_t* statbuf) {
+    return _syscall2(SYS_NR_STAT, (u32)filename, (u32)statbuf);
+}
+
+int fstat(fd_t fd, stat_t* statbuf) {
+    return _syscall2(SYS_NR_FSTAT, (u32)fd, (u32)statbuf);
 }

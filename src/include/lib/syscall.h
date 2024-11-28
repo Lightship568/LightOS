@@ -2,6 +2,7 @@
 #define LIGHTOS_SYSCALL_H
 
 #include <sys/types.h>
+#include <lightos/stat.h>
 
 #define NR_SYSCALL 256
 
@@ -102,5 +103,7 @@ int getcwd(char* buf, size_t size);
 int chdir(char* pathname);
 int chroot(char* pathname);
 int readdir(fd_t fd, void* dir, int count);
+int stat(char* filename, stat_t* statbuf);
+int fstat(fd_t fd, stat_t* statbuf);
 
 #endif

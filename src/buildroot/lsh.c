@@ -1,8 +1,9 @@
 #include <lib/stdlib.h>
 #include <lib/string.h>
 #include <lib/syscall.h>
+#include <lib/vsprintf.h>
 #include <lightos/fs.h>
-#include <sys/assert.h>
+#include <lightos/time.h>
 
 #define MAX_CMD_LEN 256
 #define MAX_ARG_NR 16
@@ -47,7 +48,7 @@ void builtin_test(int argc, char* argv[]) {
 }
 
 void readline(char* buf, u32 count) {
-    assert(buf != NULL);
+    if (!buf) return;
     char* ptr = buf;
     u32 idx = 0;
     char ch = 0;
@@ -84,7 +85,7 @@ void readline(char* buf, u32 count) {
 }
 
 static int cmd_parse(char* cmd, char* argv[], char token) {
-    assert(cmd != NULL);
+    if(!cmd) return 0;
 
     char* next = cmd;
     int argc = 0;
@@ -125,35 +126,104 @@ static void builtin_exit(int argc, char* argv[]) {
     exit(code);
 }
 
-static void builtin_ls(int argc, char* argv[]) {
-    fd_t fd;
-    int i = 1;
-    if (argc < 2) {
-        fd = open(cwd, O_RDONLY, 0);
-        printf("ls dir of %s:\n", cwd);
-        goto ls;
+static void parsemode(int mode, char* buf) {
+    memset(buf, '-', 10);
+    buf[10] = '\0';
+    char* ptr = buf;
+
+    int mode_list[] = {IFREG, IFBLK, IFDIR, IFCHR, IFIFO, IFLNK, IFSOCK};
+    char mode_char[] = {'-', 'b', 'd', 'c', 'p', 'l', 's'};
+
+    int i = 0;
+    for (; i < sizeof(mode_list) / sizeof(int); ++i) {
+        if ((mode & IFMT) == mode_list[i]) {
+            *ptr = mode_char[i];
+            break;
+        }
     }
-    for (; i < argc; ++i) {
-        fd = open(argv[i], O_RDONLY, 0);
-        printf("ls dir of %s:\n", argv[i]);
-    ls:
-        int size = readdir(fd, buf, BUFLEN);
-        if (size < 0){
+    ptr++;
+    for (i = 6; i >= 0; i -= 3) {
+        int fmt = (mode >> i) & 07;
+        if (fmt & 0b100) {
+            *ptr = 'r';
+        }
+        ptr++;
+        if (fmt & 0b010) {
+            *ptr = 'w';
+        }
+        ptr++;
+        if (fmt * 0b001) {
+            *ptr = 'x';
+        }
+        ptr++;
+    }
+}
+
+void strftime(time_t time, char* buf) {
+    // yyyy-mm-dd hh:mm:ss
+    tm tm;
+    localtime(time, &tm);
+    char* ptr = buf;
+    sprintf(buf, "%04d-%02d-%02d %02d:%02d:%02d", tm.tm_year + 1900, tm.tm_mon, tm.tm_mday,
+            tm.tm_hour, tm.tm_min, tm.tm_sec);
+}
+
+static void builtin_ls(int argc, char* argv[]) {
+    bool is_list = false;
+    bool is_pwd = true;
+    for (int i = 1; i < argc; ++i) {
+        if (!strcmp(argv[i], "-l")) {
+            is_list = true;
+        } else {
+            is_pwd = false;
+        }
+    }
+    if (is_pwd) {
+        argc++;
+        argv[argc - 1] = cwd;
+    }
+    for (int i = 1; i < argc; ++i) {
+        if (argv[i][0] == '-') {
+            continue;
+        }
+        fd_t fd = open(argv[i], O_RDONLY, 0);
+        int len = readdir(fd, buf, BUFLEN);
+        close(fd);
+        if (len < 0) {
             printf("ls: error reading dir\n");
             continue;
         }
-        for (int j = 0; j < (size / sizeof(dirent_t)); ++j) {
+        for (int j = 0; j < (len / sizeof(dirent_t)); ++j) {
             dirent_t* dir = &((dirent_t*)buf)[j];
-            if (dir->nr != 0){
-                printf("%s\n", dir->name);
+            if (!strcmp(dir->name, ".") || !strcmp(dir->name, "..")) {
+                continue;
             }
+            if (dir->nr == 0) {
+                continue;
+            }
+            if (!is_list) {
+                printf("%s\n", dir->name);
+                continue;
+            }
+
+            stat_t statbuf;
+            if(stat(dir->name, &statbuf) < 0){
+                printf("ls: error checking stat of %s\n", dir->name);
+                continue;
+            }
+            parsemode(statbuf.mode, buf);
+
+            printf("%s ", buf);
+            strftime(statbuf.mtime, buf);
+            printf("% 2d %2d %2d %2d %s %s\n", statbuf.nlinks, statbuf.uid,
+                   statbuf.gid, statbuf.size, buf, dir->name);
         }
     }
 }
 
 static void builtin_cd(int argc, char* argv[]) {
     if (argc > 1) {
-        if(chdir(argv[1]) < 0){
+        if (chdir(argv[1]) < 0) {
             printf("cd: no such dir %s\n", argv[1]);
         };
     }
@@ -165,13 +235,13 @@ static void builtin_cat(int argc, char* argv[]) {
     }
     for (int i = 1; i < argc; ++i) {
         fd_t fd = open(argv[i], O_RDONLY, 0);
-        if (fd <= 2){
+        if (fd < 0) {
             printf("cat: no such file %s\n", argv[i]);
             continue;
         }
-        while(true){
+        while (true) {
             int len = read(fd, buf, BUFLEN);
-            if (len == EOF){
+            if (len == EOF) {
                 break;
             }
             write(stdout, buf, len);
@@ -185,7 +255,7 @@ static void builtin_mkdir(int argc, char* argv[]) {
         return;
     }
     for (int i = 1; i < argc; ++i) {
-        if (mkdir(argv[i], 0755) < 0){
+        if (mkdir(argv[i], 0755) < 0) {
             printf("mkdir: error creating dir %s\n", argv[i]);
         }
     }
@@ -196,9 +266,9 @@ static void builtin_rmdir(int argc, char* argv[]) {
         return;
     }
     for (int i = 1; i < argc; ++i) {
-        if (rmdir(argv[i]) < 0){
+        if (rmdir(argv[i]) < 0) {
             printf("rmdir: error removing dir %s\n", argv[i]);
-        }else{
+        } else {
             printf("rmdir: %s\n", argv[i]);
         }
     }
@@ -211,6 +281,11 @@ static void builtin_rm(int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
         unlink(argv[i]);
     }
+}
+
+static void builtin_date(void) {
+    strftime(time(), buf);
+    printf("%s\n", buf);
 }
 
 static void execute(int argc, char* argv[]) {
@@ -237,6 +312,8 @@ static void execute(int argc, char* argv[]) {
         return builtin_rmdir(argc, argv);
     } else if (!strcmp(line, "rm")) {
         return builtin_rm(argc, argv);
+    } else if (!strcmp(line, "date")) {
+        return builtin_date();
     }
     printf("lsh: commnand not fount: %s\n", argv[0]);
 }
