@@ -71,6 +71,15 @@ cache_t* find_entry(inode_t** dir,
                     dentry_t** result) {
     assert(ISDIR((*dir)->desc->mode));
 
+    // 针对 mount 下根目录访问 .. 的处理
+    if (match_name(name, "..", next) && (*dir)->nr == 1 && (*dir) != get_root_inode()){
+        super_block_t* sb = get_super((*dir)->dev);
+        inode_t* tmpi = *dir;
+        (*dir) = sb->imount;
+        (*dir)->count++;
+        iput(tmpi);
+    }
+
     // 获得目标目录的子目录数量
     u32 entries = (*dir)->desc->size / sizeof(dentry_t);
 
@@ -88,6 +97,9 @@ cache_t* find_entry(inode_t** dir,
 
             pcache = bread((*dir)->dev, block);
             entry = (dentry_t*)pcache->data;
+        }
+        if (entry->nr == 0){
+            continue;
         }
         if (match_name(name, entry->name, next)) {
             *result = entry;

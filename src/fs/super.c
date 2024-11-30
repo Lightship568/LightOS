@@ -3,6 +3,7 @@
 #include <lightos/device.h>
 #include <lightos/fs.h>
 #include <sys/assert.h>
+#include <lightos/stat.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -22,19 +23,43 @@ static super_block_t* get_free_super() {
     panic("super block out of SUPER_NR %d\n", SUPER_NR);
 }
 
-// 获取设备 dev 的超级块
 super_block_t* get_super(dev_t dev) {
     super_block_t* sb;
     for (size_t i = 0; i < SUPER_NR; ++i) {
         sb = &super_table[i];
         if (sb->dev == dev) {
+            sb->count++;
             return sb;
         }
     }
     return NULL;
 }
 
-// 读设备 dev 的超级块
+void put_super(super_block_t* sb) {
+    if (!sb) {
+        return;
+    }
+    assert(sb->count > 0);
+    sb->count--;
+    if (sb->count) {
+        return;
+    }
+
+    // 释放该超级块的imount、iroot、位图、以及super自身所在的缓存
+    // 但设备本身仍然位于设备列表中，可以重新挂载
+    sb->dev = EOF;
+    iput(sb->imount);
+    iput(sb->iroot);
+
+    for (int i = 0; i < sb->desc->imap_blocks && i < IMAP_NR; ++i) {
+        brelse(sb->imaps[i]);
+    }
+    for (int i = 0; i < sb->desc->zmap_blocks && i < ZMAP_NR; ++i) {
+        brelse(sb->zmaps[i]);
+    }
+    brelse(sb->cache);
+}
+
 super_block_t* read_super(dev_t dev) {
     super_block_t* sb = get_super(dev);
     if (sb) {
@@ -48,6 +73,7 @@ super_block_t* read_super(dev_t dev) {
     sb->cache = bread(dev, FS_SUPER_BLOCK_NR);
     sb->desc = (super_desc_t*)sb->cache->data;
     sb->dev = dev;
+    sb->count = 1;
 
     assert(sb->desc->magic == MINIX_V1_MAGIC);
 
@@ -60,14 +86,16 @@ super_block_t* read_super(dev_t dev) {
     for (int i = 0; i < sb->desc->imap_blocks; ++i, ++idx) {
         assert(i < IMAP_NR);
         if (!(sb->imaps[i] = bread(dev, idx))) {
-            panic("Superblock bread error with return NULL\n");  // 当前的bread不会返回错误。
+            panic(
+                "Superblock bread error with return NULL\n");  // 当前的bread不会返回错误。
         }
     }
     // 读取数据块位图
     for (int i = 0; i < sb->desc->zmap_blocks; ++i, ++idx) {
         assert(i < ZMAP_NR);
         if (!(sb->zmaps[i] = bread(dev, idx))) {
-            panic("Superblock bread error with return NULL\n");  // 当前的bread不会返回错误。
+            panic(
+                "Superblock bread error with return NULL\n");  // 当前的bread不会返回错误。
         }
     }
 
@@ -83,11 +111,112 @@ static void mount_root() {
     root = read_super(device->dev);
 
     // 初始化根目录inode
-    root->iroot = iget(device->dev, 1); 
+    root->iroot = iget(device->dev, 1);
     // 根目录挂载点
-    root->imount = iget(device->dev, 1); // 增加引用计数
+    root->imount = iget(device->dev, 1);  // 增加引用计数
+
+    root->iroot->mount = device->dev;
 
     LOGK("Root file system mounted\n");
+}
+
+int32 sys_mount(char* devname, char* dirname, int flags){
+    LOGK("mount %s to %s\n", devname, dirname);
+
+    inode_t* devinode = NULL;
+    inode_t* dirinode = NULL;
+    super_block_t* sb = NULL;
+    devinode = namei(devname);
+    if (!devinode){
+        goto clean;
+    }
+    if (!ISBLK(devinode->desc->mode)){
+        goto clean;
+    }
+    dev_t dev = devinode->desc->zone[0];
+    dirinode = namei(dirname);
+    if(!dirinode){
+        goto clean;
+    }
+    if (!ISDIR(dirinode->desc->mode)){
+        goto clean;
+    }
+    // 引用不是 1（避免目录被打开占用），或者已经挂载了设备
+    if (dirinode->count != 1 || dirinode->mount){
+        goto clean;
+    }
+
+    // 读取超级块，设置其根目录
+    sb = read_super(dev);
+    // 只能 mount 一次
+    if (sb->imount){
+        goto clean;
+    }
+    sb->iroot = iget(dev, 1);
+    sb->imount = dirinode;
+    dirinode->mount = dev;
+    iput(devinode);
+    return 0;
+
+clean:
+    put_super(sb);
+    iput(devinode);
+    iput(dirinode);
+    return EOF;
+}
+
+int32 sys_umount(char* target){
+    LOGK("umount %s\n", target);
+    inode_t* inode = NULL;
+    super_block_t* sb = NULL;
+    int ret = EOF;
+
+    inode = namei(target);
+    if (!inode){
+        goto clean;
+    }
+    // 确保 target 是 devname 或非根目录的 dirname
+    if (!ISBLK(inode->desc->mode) && inode->nr != 1){
+        goto clean;
+    }
+    // 不允许卸载系统根目录
+    if (inode == root->imount){
+        goto clean;
+    }
+    // umount dirname
+    dev_t dev = inode->dev;
+    // umount devname
+    if (ISBLK(inode->desc->mode)){
+        dev = inode->desc->zone[0];
+    }
+
+    sb = get_super(dev);
+    // 检查是否已经挂载
+    if (!sb->imount){
+        goto clean;
+    }
+    // 确保被挂载的目录也有挂载信息
+    if (!sb->imount->mount){
+        LOGK("Warning super block imount->mount = 0\n");
+    }
+    // 确保设备上没有正在被使用的文件
+    if (list_size(&sb->inode_list) > 1){
+        goto clean;
+    }
+    // 释放 superblock
+    iput(sb->iroot);
+    sb->iroot = NULL;
+
+    // 释放文件系统 dirname 的 inode
+    sb->imount->mount = 0;
+    iput(sb->imount);
+
+    sb->imount = NULL;
+    ret = 0;
+clean:
+    put_super(sb);
+    iput(inode);
+    return ret;
 }
 
 void super_init(void) {

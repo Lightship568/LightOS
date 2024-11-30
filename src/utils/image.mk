@@ -50,12 +50,10 @@ fs: $(BUILD)/LightOS.img $(BUILD)/slave.img
 # 切换所有者
 	sudo chown ${USER} $(MNT_PATH)
 # 创建目录
-	mkdir -p $(MNT_PATH)/empty
-	mkdir -p $(MNT_PATH)/home
-	mkdir -p $(MNT_PATH)/d1/d2/d3/d4
+	mkdir -p $(MNT_PATH)/dev
+	mkdir -p $(MNT_PATH)/mnt
 #创建文件
 	echo "hello LightOS, from root directory!" > $(MNT_PATH)/hello.txt
-	echo "hello LightOS, from root directory!" > $(MNT_PATH)/home/hello.txt
 # 卸载文件系统与设备
 	sudo umount $(MNT_PATH)
 	sudo losetup -d ${LOOP_DEV}

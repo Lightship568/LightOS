@@ -55,6 +55,21 @@ static inode_t* find_inode(dev_t dev, idx_t nr) {
     return NULL;
 }
 
+// 如果 iget 尝试获取一个被 mount 的 inode
+// 则需要将这个 inode 变化为该设备上的根目录
+static inode_t* fit_inode(inode_t* inode) {
+    if (!inode || !inode->mount) {
+        return inode;
+    }
+    dev_t dev = inode->mount;
+    super_block_t* sb = get_super(dev);
+    assert(sb);
+    iput(inode);
+    inode = sb->iroot;
+    inode->count++;
+    return inode;
+}
+
 extern time_t sys_time(void);
 
 // 获取 inode
@@ -63,7 +78,8 @@ inode_t* iget(dev_t dev, idx_t nr) {
     if (inode) {
         inode->count++;
         inode->atime = sys_time();
-        return inode;
+        // 被 mount 的目录一定在 inode 链表中，因此只需要在此 fit_inode 即可
+        return fit_inode(inode);
     }
     super_block_t* sb = get_super(dev);
     assert(sb);
@@ -73,9 +89,9 @@ inode_t* iget(dev_t dev, idx_t nr) {
     inode->dev = dev;
     inode->nr = nr;
     // task_初始化 idle+init 的 iroot+ipwd 导致根 inode 已经增加了四个引用计数
-    if (inode == get_root_inode()){
+    if (inode == get_root_inode()) {
         assert(inode->count == 4);
-    }else{
+    } else {
         assert(inode->count == 0);
         inode->count = 1;
     }
@@ -118,20 +134,20 @@ void iput(inode_t* inode) {
     put_free_inode(inode);
 }
 
-static void inode_bfree(inode_t* inode, u16* array, int index, int level){
-    if (!array[index]){
+static void inode_bfree(inode_t* inode, u16* array, int index, int level) {
+    if (!array[index]) {
         return;
     }
 
     // 直接块直接释放
-    if (!level){
+    if (!level) {
         bfree(inode->dev, array[index]);
         return;
     }
 
     cache_t* pcache = bread(inode->dev, array[index]);
-    for(size_t i = 0; i < BLOCK_INDEXES; ++i){
-        inode_bfree(inode, (u16*)pcache->data, i , level - 1);
+    for (size_t i = 0; i < BLOCK_INDEXES; ++i) {
+        inode_bfree(inode, (u16*)pcache->data, i, level - 1);
     }
     brelse(pcache);
     bfree(inode->dev, array[index]);
@@ -162,10 +178,10 @@ void inode_truncate(inode_t* inode) {
 
     // 强一致
     inode->cache->dirty = true;
-    bwrite(inode->cache); 
+    bwrite(inode->cache);
 }
 
-inode_t* new_inode(dev_t dev, idx_t nr){
+inode_t* new_inode(dev_t dev, idx_t nr) {
     task_t* task = get_current();
     inode_t* inode = iget(dev, nr);
     assert(inode->desc->nlinks == 0);

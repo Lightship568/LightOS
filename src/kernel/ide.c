@@ -548,9 +548,9 @@ static void ide_ctrl_init() {
             if (ide_identify(disk, buf) == 0) {
                 ide_part_init(disk, buf);
             }
-            break;
+            // break;
         }
-        break;
+        // break;
     }
     free_kpage((u32)buf, 1);
 }

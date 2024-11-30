@@ -37,7 +37,7 @@
     (DIRECT_BLOCKS + INDIRECT1_BLOCKS + INDIRECT2_BLOCKS)  // 全部块数量
 #define FILE_MAX_SIZE (TOTAL_BLOCKS * BLOCK_SIZE)  // 文件最大大小（256MB）
 
-#define MAX_PATH_LEN 4096 // 最大路径长度
+#define MAX_PATH_LEN 4096  // 最大路径长度
 
 enum file_flag {
     O_RDONLY = 00,     // 只读方式
@@ -93,6 +93,7 @@ typedef struct super_block_t {
     cache_t* imaps[IMAP_NR];  // inode位图缓冲
     cache_t* zmaps[ZMAP_NR];  // 块位图缓冲
     dev_t dev;                // 设备号
+    u32 count;                // 引用计数
     list_t inode_list;        // 使用中inode链表
     inode_t* iroot;           // 根目录inode
     inode_t* imount;          // 安装到的inode
@@ -122,8 +123,14 @@ typedef enum whence_t {
 
 // 获取设备 dev 的超级块
 super_block_t* get_super(dev_t dev);
+// 释放设备 dev 的超级块
+void put_super(super_block_t* sb);
 // 读设备 dev 的超级块
 super_block_t* read_super(dev_t dev);
+// syscall: mount/umount
+int32 sys_mount(char* devname, char* dirname, int flags);
+// umount target 可能是 devname 或 dirname 的其中一个
+int32 sys_umount(char* target);
 // 初始化
 void super_init(void);
 void inode_init(void);
@@ -187,7 +194,7 @@ int sys_unlink(char* filename);
 
 /****************************************************
  * 文件相关
- ****************************************************/ 
+ ****************************************************/
 
 // 初始化
 void file_init(void);
@@ -213,7 +220,7 @@ int32 sys_readdir(fd_t fd, void* dir, int count);
 
 /****************************************************
  * 设备相关
- ****************************************************/ 
+ ****************************************************/
 
 // 文件系统设备初始化
 void dev_init(void);

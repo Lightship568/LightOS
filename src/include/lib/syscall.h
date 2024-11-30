@@ -106,5 +106,7 @@ int readdir(fd_t fd, void* dir, int count);
 int stat(char* filename, stat_t* statbuf);
 int fstat(fd_t fd, stat_t* statbuf);
 int mknod(char* filename, int mode, int dev);
+int mount(char* devname, char* dirname, int flags);
+int umount(char* target);
 
 #endif

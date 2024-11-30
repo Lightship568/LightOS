@@ -48,7 +48,8 @@ void builtin_test(int argc, char* argv[]) {
 }
 
 void readline(char* buf, u32 count) {
-    if (!buf) return;
+    if (!buf)
+        return;
     char* ptr = buf;
     u32 idx = 0;
     char ch = 0;
@@ -85,7 +86,8 @@ void readline(char* buf, u32 count) {
 }
 
 static int cmd_parse(char* cmd, char* argv[], char token) {
-    if(!cmd) return 0;
+    if (!cmd)
+        return 0;
 
     char* next = cmd;
     int argc = 0;
@@ -164,8 +166,8 @@ void strftime(time_t time, char* buf) {
     tm tm;
     localtime(time, &tm);
     char* ptr = buf;
-    sprintf(buf, "%04d-%02d-%02d %02d:%02d:%02d", tm.tm_year + 1900, tm.tm_mon, tm.tm_mday,
-            tm.tm_hour, tm.tm_min, tm.tm_sec);
+    sprintf(buf, "%04d-%02d-%02d %02d:%02d:%02d", tm.tm_year + 1900, tm.tm_mon,
+            tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
 }
 
 static void builtin_ls(int argc, char* argv[]) {
@@ -209,7 +211,7 @@ static void builtin_ls(int argc, char* argv[]) {
             stat_t statbuf;
             char pathstr[MAX_CMD_LEN + NAME_LEN];
             sprintf(pathstr, "%s/%s", argv[i], dir->name);
-            if(stat(pathstr, &statbuf) < 0){
+            if (stat(pathstr, &statbuf) < 0) {
                 printf("ls: error checking stat of %s\n", dir->name);
                 continue;
             }
@@ -290,6 +292,24 @@ static void builtin_date(void) {
     printf("%s\n", buf);
 }
 
+static void builtin_mount(int argc, char* argv[]) {
+    if (argc < 3) {
+        return;
+    }
+    if (mount(argv[1], argv[2], 0)) {
+        printf("error mount %s to %s\n", argv[1], argv[2]);
+    }
+}
+
+static void builtin_umount(int argc, char* argv[]) {
+    if (argc < 2) {
+        return;
+    }
+    if (umount(argv[1])) {
+        printf("error umount %s\n", argv[1]);
+    }
+}
+
 static void execute(int argc, char* argv[]) {
     char* line = argv[0];
     if (!strcmp(line, "test")) {
@@ -316,6 +336,10 @@ static void execute(int argc, char* argv[]) {
         return builtin_rm(argc, argv);
     } else if (!strcmp(line, "date")) {
         return builtin_date();
+    } else if (!strcmp(line, "mount")) {
+        return builtin_mount(argc, argv);
+    } else if (!strcmp(line, "umount")) {
+        return builtin_umount(argc, argv);
     }
     printf("lsh: commnand not fount: %s\n", argv[0]);
 }
