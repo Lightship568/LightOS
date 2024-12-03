@@ -15,9 +15,11 @@ idx_t balloc(dev_t dev) {
     cache_t* pcache = NULL;
     idx_t bit = EOF;
     bitmap_t map;
+    idx_t bidx = FS_IMAP_BLOCK_NR + sb->desc->imap_blocks;
+    size_t i = 0;
 
-    for (size_t i = 0; i < ZMAP_NR; ++i) {
-        pcache = sb->zmaps[i];
+    for (; i < sb->desc->zmap_blocks; ++i) {
+        pcache = bread(sb->dev, bidx + i);
         assert(pcache);
 
         // 将整个缓冲区作为位图
@@ -33,8 +35,11 @@ idx_t balloc(dev_t dev) {
             break;
         }
     }
-    // todo: 空间已满导致的扫描失败
+    if (i == sb->desc->zmap_blocks){
+        // todo: 空间已满导致的扫描失败
+    }
     bwrite(pcache);  // 强一致
+    put_super(sb);
     return bit;
 }
 
@@ -64,6 +69,7 @@ void bfree(dev_t dev, idx_t idx) {
 
     pcache->dirty = true;
     bwrite(pcache);  // 强一致
+    put_super(sb);
 }
 
 // 分配一个文件系统 inode
@@ -74,9 +80,11 @@ idx_t ialloc(dev_t dev) {
     cache_t* pcache = NULL;
     idx_t bit = EOF;
     bitmap_t map;
+    idx_t bidx = FS_IMAP_BLOCK_NR;
+    size_t i = 0;
 
-    for (size_t i = 0; i < IMAP_NR; ++i) {
-        pcache = sb->imaps[i];
+    for (; i < sb->desc->imap_blocks; ++i) {
+        pcache = bread(sb->dev, bidx + i);
         assert(pcache);
 
         // 将整个缓冲区作为位图
@@ -86,12 +94,16 @@ idx_t ialloc(dev_t dev) {
         bit = bitmap_scan(&map, 1);
         if (bit != EOF) {
             // 如果扫描成功，则标记
-            assert(bit < sb->desc->zones);
+            assert(bit < sb->desc->inodes);
             pcache->dirty = true;
             break;
         }
     }
+    if (i == sb->desc->imap_blocks){
+        // todo: 空间已满导致的扫描失败
+    }
     bwrite(pcache);  // 强一致
+    put_super(sb);
     return bit;
 }
 
@@ -119,9 +131,10 @@ void ifree(dev_t dev, idx_t idx) {
 
     pcache->dirty = true;
     bwrite(pcache);  // 强一致
+    put_super(sb);
 }
 
-idx_t bmap(inode_t* inode, idx_t block, bool create){
+idx_t bmap(inode_t* inode, idx_t block, bool create) {
     assert(block >= 0 && block < TOTAL_BLOCKS);
     // 将每一个level视作一个array，查找block偏移
     u16 index = block;
@@ -136,14 +149,14 @@ idx_t bmap(inode_t* inode, idx_t block, bool create){
     int divider = 1;
 
     // 直接块
-    if (block < DIRECT_BLOCKS){
+    if (block < DIRECT_BLOCKS) {
         goto reckon;
     }
 
     block -= DIRECT_BLOCKS;
     // 一级间接块
-    if (block < INDIRECT1_BLOCKS){
-        index = DIRECT_BLOCKS; // 设置为一级间接块
+    if (block < INDIRECT1_BLOCKS) {
+        index = DIRECT_BLOCKS;  // 设置为一级间接块
         level = 1;
         divider = 1;
         goto reckon;
@@ -151,14 +164,14 @@ idx_t bmap(inode_t* inode, idx_t block, bool create){
     // 二级间接块
     block -= INDIRECT1_BLOCKS;
     assert(block < INDIRECT2_BLOCKS);
-    index = DIRECT_BLOCKS + 1; // 设置为二级间接块
+    index = DIRECT_BLOCKS + 1;  // 设置为二级间接块
     level = 2;
     divider = BLOCK_INDEXES;
 
 reckon:
-    for (; level >= 0; level--){
+    for (; level >= 0; level--) {
         // 如果不存在，且 create，则申请一块文件快
-        if (!array[index] && create){
+        if (!array[index] && create) {
             array[index] = balloc(inode->dev);
             pcache->dirty = true;
         }
@@ -166,7 +179,7 @@ reckon:
         brelse(pcache);
 
         // 如果 level == 0 或者 索引不存在，则直接返回
-        if (level == 0 || !array[index]){
+        if (level == 0 || !array[index]) {
             return array[index];
         }
 

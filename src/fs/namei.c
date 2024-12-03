@@ -78,6 +78,7 @@ cache_t* find_entry(inode_t** dir,
         (*dir) = sb->imount;
         (*dir)->count++;
         iput(tmpi);
+        put_super(sb);
     }
 
     // 获得目标目录的子目录数量

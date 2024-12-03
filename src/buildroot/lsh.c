@@ -310,6 +310,17 @@ static void builtin_umount(int argc, char* argv[]) {
     }
 }
 
+static void builtin_mkfs(int argc, char* argv[]) {
+    if (argc < 3) {
+        return;
+    }
+    if (mkfs(argv[1], atoi(argv[2]))) {
+        printf("error mkfs %s\n", argv[1]);
+    }else{
+        printf("success\n");
+    }
+}
+
 static void execute(int argc, char* argv[]) {
     char* line = argv[0];
     if (!strcmp(line, "test")) {
@@ -340,6 +351,8 @@ static void execute(int argc, char* argv[]) {
         return builtin_mount(argc, argv);
     } else if (!strcmp(line, "umount")) {
         return builtin_umount(argc, argv);
+    } else if (!strcmp(line, "mkfs")) {
+        return builtin_mkfs(argc, argv);
     }
     printf("lsh: commnand not fount: %s\n", argv[0]);
 }

@@ -44,15 +44,18 @@ static inode_t* find_inode(dev_t dev, idx_t nr) {
     super_block_t* super = get_super(dev);
     assert(super);
     list_t* list = &super->inode_list;
+    inode_t* ret = NULL;
 
     for (list_node_t* node = list->head.next; node != &list->tail;
          node = node->next) {
         inode_t* inode = element_entry(inode_t, node, node);
         if (inode->nr == nr) {
-            return inode;
+            ret = inode;
+            break;
         }
     }
-    return NULL;
+    put_super(super);
+    return ret;
 }
 
 // 如果 iget 尝试获取一个被 mount 的 inode
@@ -67,6 +70,7 @@ static inode_t* fit_inode(inode_t* inode) {
     iput(inode);
     inode = sb->iroot;
     inode->count++;
+    put_super(sb);
     return inode;
 }
 
@@ -92,7 +96,7 @@ inode_t* iget(dev_t dev, idx_t nr) {
     if (inode == get_root_inode()) {
         assert(inode->count == 4);
     } else {
-        assert(inode->count == 0);
+        // assert(inode->count == 0);
         inode->count = 1;
     }
 
@@ -109,6 +113,8 @@ inode_t* iget(dev_t dev, idx_t nr) {
 
     inode->ctime = inode->desc->mtime;
     inode->atime = sys_time();
+
+    put_super(sb);
 
     return inode;
 }
@@ -184,7 +190,8 @@ void inode_truncate(inode_t* inode) {
 inode_t* new_inode(dev_t dev, idx_t nr) {
     task_t* task = get_current();
     inode_t* inode = iget(dev, nr);
-    assert(inode->desc->nlinks == 0);
+    // 可能来自 mkfs，此时若文件系统已存在，则 iroot 的 nlinks == 2
+    // assert(inode->desc->nlinks == 0);
 
     inode->cache->dirty = true;
 

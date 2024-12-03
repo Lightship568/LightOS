@@ -131,6 +131,10 @@ super_block_t* read_super(dev_t dev);
 int32 sys_mount(char* devname, char* dirname, int flags);
 // umount target 可能是 devname 或 dirname 的其中一个
 int32 sys_umount(char* target);
+// syscall: mkfs 格式化文件系统
+int32 sys_mkfs(char* devname, int icount);
+// 格式化文件系统，传入 dev 与预期 inode 数量（默认1/3*blocks，传0）
+int32 devmkfs(dev_t dev, u32 icount);
 // 初始化
 void super_init(void);
 void inode_init(void);
