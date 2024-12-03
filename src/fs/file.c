@@ -1,11 +1,11 @@
+#include <lib/arena.h>
+#include <lib/stdlib.h>
 #include <lib/string.h>
 #include <lightos/device.h>
 #include <lightos/fs.h>
+#include <lightos/stat.h>
 #include <lightos/task.h>
 #include <sys/assert.h>
-#include <lib/arena.h>
-#include <lib/stdlib.h>
-#include <lightos/stat.h>
 
 // 全系统最大同时打开文件数
 #define FILE_NR 128
@@ -74,70 +74,95 @@ void sys_close(fd_t fd) {
     task_put_fd(task, fd);
 }
 
-int32 sys_read(fd_t fd, char* buf, u32 len) {
-    if (fd < 0 || fd >= TASK_FILE_NR){
-        return EOF;
-    }
-    if (fd == stdin) {
-        device_t* device = device_find(DEV_KEYBOARD, 0);
-        return device_read(device->dev, buf, len, 0, 0);
-    } else if (fd == stdout || fd == stderr) {
+int32 sys_read(fd_t fd, char* buf, u32 count) {
+    if (fd < 0 || fd >= TASK_FILE_NR) {
         return EOF;
     }
     task_t* task = get_current();
     file_t* file = task->files[fd];
     assert(file);
-    assert(len > 0);
+    assert(count > 0);
     // 仅写入，不可读
     if ((file->flags & O_ACCMODE) == O_WRONLY) {
-        return EOF;
+        goto exit;
     }
+
     inode_t* inode = file->inode;
-    len = inode_read(inode, buf, len, file->offset);
-    // 读取成功，增加文件偏移
-    if (len != EOF) {
-        file->offset += len;
+    int ret = EOF;
+    // 字符设备、块设备、与正常文件判断
+    if (ISCHR(inode->desc->mode)) {
+        assert(inode->desc->zone[0]);
+        ret = device_read(inode->desc->zone[0], buf, count, 0, 0);
+        goto exit;
+    } else if (ISBLK(inode->desc->mode)) {
+        assert(inode->desc->zone[0]);
+        device_t* device = device_get(inode->desc->zone[0]);
+        assert(file->offset % BLOCK_SECS == 0);
+        assert(count % BLOCK_SIZE == 0);
+        ret = device_read(inode->desc->zone[0], buf, count / BLOCK_SIZE,
+                          file->offset / BLOCK_SIZE, 0);
+        goto exit;
+    } else {
+        ret = inode_read(inode, buf, count, file->offset);
+        // 读取成功，增加文件偏移
+        if (ret != EOF) {
+            file->offset += ret;
+        }
+        goto exit;
     }
-    return len;
+exit:
+    return ret;
 }
 
-int32 sys_write(fd_t fd, char* buf, u32 len) {
-    if (fd <= 0 || fd >= TASK_FILE_NR){
+int32 sys_write(fd_t fd, char* buf, u32 count) {
+    if (fd <= 0 || fd >= TASK_FILE_NR) {
         return EOF;
     }
-    if (fd == stdout || fd == stderr) {
-        device_t* device = device_find(DEV_CONSOLE, 0);
-        return device_write(device->dev, buf, len, 0, 0);
-    } else if (fd == stdin) {
-        return EOF;
-    }
-
     task_t* task = get_current();
     file_t* file = task->files[fd];
     assert(file);
-    assert(len > 0);
+    assert(count > 0);
     // 仅读取，不可写
     if ((file->flags & O_ACCMODE) == O_RDONLY) {
         return EOF;
     }
+
     inode_t* inode = file->inode;
-    len = inode_write(inode, buf, len, file->offset);
-    // 写入成功，增加文件偏移
-    if (len != EOF) {
-        file->offset += len;
+    int ret = EOF;
+    // 字符设备、块设备、与正常文件判断
+    if (ISCHR(inode->desc->mode)) {
+        assert(inode->desc->zone[0]);
+        ret = device_write(inode->desc->zone[0], buf, count, 0, 0);
+        goto exit;
+    } else if (ISBLK(inode->desc->mode)) {
+        assert(inode->desc->zone[0]);
+        device_t* device = device_get(inode->desc->zone[0]);
+        assert(file->offset % BLOCK_SECS == 0);
+        assert(count % BLOCK_SIZE == 0);
+        ret = device_write(inode->desc->zone[0], buf, count / BLOCK_SIZE,
+                          file->offset / BLOCK_SIZE, 0);
+        goto exit;
+    } else {
+        ret = inode_write(inode, buf, count, file->offset);
+        // 读取成功，增加文件偏移
+        if (ret != EOF) {
+            file->offset += ret;
+        }
+        goto exit;
     }
-    return len;
+exit:
+    return ret;
 }
 
 int32 sys_lseek(fd_t fd, off_t offset, whence_t whence) {
-    if (fd <= stderr || fd >= TASK_FILE_NR){
+    if (fd <= STDERR_FILENO || fd >= TASK_FILE_NR) {
         return EOF;
     }
     task_t* task = get_current();
     file_t* file = task->files[fd];
     int ret = EOF;
 
-    if (!file){
+    if (!file) {
         return EOF;
     }
     // 个人认为下面这句没必要，只有打开的文件才会有 file，不需要 inode 判断
@@ -244,12 +269,12 @@ int32 sys_chdir(char* pathname) {
         ret = EOF;
         goto clean;
     }
-    if (!ISDIR(inode->desc->mode)){
+    if (!ISDIR(inode->desc->mode)) {
         ret = EOF;
         goto clean;
     }
     // 本目录无需切换
-    if (inode == task->ipwd){
+    if (inode == task->ipwd) {
         goto clean;
     }
 
@@ -289,7 +314,7 @@ int32 sys_chroot(char* pathname) {
         ret = EOF;
         goto clean;
     }
-    if (!ISDIR(inode->desc->mode) || inode == task->ipwd){
+    if (!ISDIR(inode->desc->mode) || inode == task->ipwd) {
         ret = EOF;
         goto clean;
     }
@@ -303,10 +328,17 @@ clean:
     return ret;
 }
 
-int32 sys_readdir(fd_t fd, void* dir, int count){
+int32 sys_readdir(fd_t fd, void* dir, int count) {
     return sys_read(fd, (char*)dir, count);
 }
 
 void file_init(void) {
-    memset(file_table, 0, sizeof(file_table));
+    for (size_t i = 3; i > FILE_NR; +i) {
+        file_t* file = &file_table[i];
+        file->mode = 0;
+        file->count = 0;
+        file->flags = 0;
+        file->offset = 0;
+        file->inode = NULL;
+    }
 }

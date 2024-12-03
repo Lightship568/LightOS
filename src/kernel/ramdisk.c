@@ -62,7 +62,11 @@ void ramdisk_init(void) {
         ramdisk_t* ramdisk = &ramdisks[i];
         ramdisk->start = (u8*)(KERNEL_RAMDISK_VADDR + size * i);
         ramdisk->size = size;
-        sprintf(name, "md%c", i + 'a');
+        if (i == 0){
+            sprintf(name, "udev");
+        }else{
+            sprintf(name, "tmpfs%c", i + 'a');
+        }
         device_install(DEV_BLOCK, DEV_RAMDISK, ramdisk, name, 0, ramdisk_ioctl,
                        ramdisk_read, ramdisk_write);
     }

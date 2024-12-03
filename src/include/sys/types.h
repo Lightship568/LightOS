@@ -54,9 +54,9 @@ typedef u16 mode_t;
 
 typedef int32 fd_t; // 文件描述符索引，负值表示错误码
 typedef enum std_fd_t{
-    stdin,
-    stdout,
-    stderr,
+    STDIN_FILENO,
+    STDOUT_FILENO,
+    STDERR_FILENO,
 } std_fd_t;
 typedef int32 off_t; // 文件偏移
 

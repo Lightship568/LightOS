@@ -211,8 +211,8 @@ fd_t sys_open(char* filename, int flags, int mode);
 fd_t sys_creat(char* filename, int mode);
 void sys_close(fd_t fd);
 // syscall: read/write
-int32 sys_read(fd_t fd, char* buf, u32 len);
-int32 sys_write(fd_t fd, char* buf, u32 len);
+int32 sys_read(fd_t fd, char* buf, u32 count);
+int32 sys_write(fd_t fd, char* buf, u32 count);
 // syscall: lseek
 int32 sys_lseek(fd_t fd, off_t offset, whence_t whence);
 // syscall: getcwd/chdir/chroot

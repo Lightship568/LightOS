@@ -2811,5 +2811,23 @@ mount /dev/hdb1 /mnt #测试一切正常
 
 此外还遇到了一个 mkfs 结束 put_super 时的位图 cache 引用计数 < 0 的 bug，原因是上面初始化位图时将pcache释放了。总之，位图的 pcahce 要跟随 super 的生命周期同生共死，不能提前释放，只能在 put_super 中释放。
 
+## ramdisk
+
+给一块内存配置 ioctl read write 驱动，就可以如同操作设备一样操作内存，例如 /dev 文件系统就是一个 ramdisk。dev_init 初始化的时候手动 mount 一下就可以了，很简单。
+
+## 标准输入输出错误
+
+为了实现输入输出的重定向功能，比如 ./binary < filename.txt，因此需要将标准输入输出抽象为块设备文件`ISCHAR(inode.desc.mode）`，这样就可以通过覆盖 PCB  的 file[0] file[1] file[2] 实现对标准输入输出错误的修改。
+
+在linux中，这个功能是由 dup2 或 open 系统调用实现的。
+
+>  `dup2` 的全称是 **duplicate file descriptor to a specific value**，意思是“将文件描述符复制到指定的值”。
+
+因此在 sys_read sys_write 中，需要支持对 块设备 和 字符设备 的直接读取，比如程序尝试读取标准输入，fd 传入 0，sys_read 应该能够通过 inode 得知这是一个字符设备并进行读取，逻辑很简单。
+
+需要注意一点，需要对特殊的 ramfs 比如 /dev 进行保护，防止 umount。目前采用的方法是 umount 时做 dev 号检查，但是这种 list 查表不是很高效。此外如果init进程在初始化时打开了标准流，那么此时 /dev 中应该是保持 inode 打开的状态，应该是本来就无法卸载（linux测试发现显示设备正忙，也是这个原因？），可能不需要做特殊检查了。
+
+
+
 
 

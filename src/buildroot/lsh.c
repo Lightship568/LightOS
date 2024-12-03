@@ -55,7 +55,7 @@ void readline(char* buf, u32 count) {
     char ch = 0;
     while (idx < count) {
         ptr = buf + idx;
-        int ret = read(stdin, ptr, 1);
+        int ret = read(STDIN_FILENO, ptr, 1);
         if (ret == -1) {
             *ptr = 0;
             return;
@@ -65,19 +65,19 @@ void readline(char* buf, u32 count) {
             case '\r':
                 *ptr = 0;
                 ch = '\n';
-                write(stdout, &ch, 1);
+                write(STDOUT_FILENO, &ch, 1);
                 return;
             case '\b':
                 if (idx > 0) {
                     idx--;
                     ch = '\b';
-                    write(stdout, &ch, 1);
+                    write(STDOUT_FILENO, &ch, 1);
                 }
                 break;
             case '\t':
                 continue;
             default:
-                write(stdout, ptr, 1);
+                write(STDOUT_FILENO, ptr, 1);
                 idx++;
                 break;
         }
@@ -195,6 +195,7 @@ static void builtin_ls(int argc, char* argv[]) {
             printf("ls: error reading dir\n");
             continue;
         }
+        bool is_first_print = true;
         for (int j = 0; j < (len / sizeof(dirent_t)); ++j) {
             dirent_t* dir = &((dirent_t*)buf)[j];
             if (!strcmp(dir->name, ".") || !strcmp(dir->name, "..")) {
@@ -204,7 +205,12 @@ static void builtin_ls(int argc, char* argv[]) {
                 continue;
             }
             if (!is_list) {
-                printf("%s ", dir->name);
+                if (is_first_print){
+                    printf("%s", dir->name);
+                    is_first_print = false;
+                }else{
+                    printf(" %s", dir->name);
+                }
                 continue;
             }
 
@@ -247,11 +253,11 @@ static void builtin_cat(int argc, char* argv[]) {
             continue;
         }
         while (true) {
-            int len = read(fd, buf, BUFLEN);
+            int len = read(fd, buf, 1);
             if (len == EOF) {
                 break;
             }
-            write(stdout, buf, len);
+            write(STDOUT_FILENO, buf, len);
         }
         close(fd);
     }

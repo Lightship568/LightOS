@@ -81,8 +81,8 @@ typedef enum syscall_t
 void test(void);
 void yield(void);
 void sleep(u32 ms);
-int32 read(fd_t fd, char *buf, u32 len);
-int32 write(fd_t fd, char *buf, u32 len);
+int32 read(fd_t fd, char *buf, u32 count);
+int32 write(fd_t fd, char *buf, u32 count);
 int32 brk(void* addr);
 pid_t getpid();
 pid_t getppid();

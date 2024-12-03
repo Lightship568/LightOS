@@ -13,7 +13,6 @@
 #include <sys/assert.h>
 #include <sys/global.h>
 #include <sys/types.h>
-#include <lib/arena.h>
 
 extern void init_kthread(void);
 
@@ -139,7 +138,7 @@ void idle(void) {
     }
 }
 
-// 寻找 task_list 空闲
+extern file_t file_table[];
 
 // 初始化进程pcb（包括tss）
 pid_t task_create(void (*eip_ptr)(void),
@@ -168,12 +167,23 @@ pid_t task_create(void (*eip_ptr)(void),
     task->umask = 0022;  // 0755
     task->iroot->count += 2;
 
+    // 当前工作目录
     task->pwd_len = 1;
     task->pwd = (char*)kmalloc(task->pwd_len);
     task->pwd[0] = '/';
 
+    // 标准流
+    task->files[STDIN_FILENO] = &file_table[STDIN_FILENO];
+    task->files[STDOUT_FILENO] = &file_table[STDOUT_FILENO];
+    task->files[STDERR_FILENO] = &file_table[STDERR_FILENO];
+    task->files[STDIN_FILENO]->count++;
+    task->files[STDOUT_FILENO]->count++;
+    task->files[STDERR_FILENO]->count++;
+
+    // 魔数
     task->magic = LIGHTOS_MAGIC;
 
+    // 关键 tss 初始化
     task->tss.eip = (u32)eip_ptr;
     task->tss.ebp = stack;
     task->tss.esp = stack;
@@ -297,9 +307,9 @@ u32 sys_fork() {
     task->iroot->count++;
 
     // 文件引用计数
-    for(size_t i = 0; i < TASK_FILE_NR; ++i){
+    for (size_t i = 0; i < TASK_FILE_NR; ++i) {
         file_t* file = child->files[i];
-        if (file){
+        if (file) {
             file->count++;
         }
     }
@@ -358,13 +368,12 @@ u32 sys_exit(u32 status) {
     iput(task->ipwd);
     iput(task->iroot);
 
-    for(size_t i = 0; i< TASK_FILE_NR; ++i){
+    for (size_t i = 0; i < TASK_FILE_NR; ++i) {
         file_t* file = task->files[i];
-        if (file){ // fd: 0,1,2 初始化时默认清零
+        if (file) {  // fd: 0,1,2 初始化时默认清零
             sys_close(i);
         }
     }
-
 
     for (size_t i = 0; i < NR_TASKS; ++i) {
         if (!task_list[i])

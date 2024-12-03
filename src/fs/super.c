@@ -200,6 +200,12 @@ int32 sys_umount(char* target) {
         dev = inode->desc->zone[0];
     }
 
+    // 不允许卸载 /dev 目录
+    // todo: 调研高效?的保护机制
+    if (device_find(DEV_RAMDISK, 0)->dev == dev){
+        goto clean;
+    }
+
     sb = get_super(dev);
     // 检查是否已经挂载
     if (!sb->imount) {
