@@ -123,6 +123,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/buildroot/lsh.o	\
 	$(BUILD)/fs/stat.o			\
 	$(BUILD)/fs/dev.o			\
+	$(BUILD)/kernel/ramdisk.o	\
 
 	$(shell mkdir -p $(dir $@))
 	ld ${LDFLAGS} $^ -o $@

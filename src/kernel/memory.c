@@ -8,7 +8,7 @@
 #include <sys/types.h>
 
 // 关闭 memory 的内核注释
-// #define LOGK(fmt, args...) DEBUGK(fmt, args...)
+// #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 #define LOGK(fmt, args...) ;
 
 #define ZONE_VALID 1     // ards 可用区域

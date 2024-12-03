@@ -91,7 +91,7 @@ dev_t device_install(int type,
     return device->dev;
 }
 
-void device_init() {
+void device_init(void) {
     for (size_t i = 0; i < DEVICE_NR; ++i) {
         device_t* device = &device_list[i];
         strcpy((char*)device->name, "null");

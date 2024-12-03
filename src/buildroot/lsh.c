@@ -204,7 +204,7 @@ static void builtin_ls(int argc, char* argv[]) {
                 continue;
             }
             if (!is_list) {
-                printf("%s\n", dir->name);
+                printf("%s ", dir->name);
                 continue;
             }
 
@@ -221,6 +221,9 @@ static void builtin_ls(int argc, char* argv[]) {
             strftime(statbuf.mtime, buf);
             printf("% 2d %2d %2d %2d %s %s\n", statbuf.nlinks, statbuf.uid,
                    statbuf.gid, statbuf.size, buf, dir->name);
+        }
+        if (!is_list){
+            printf("\n");
         }
     }
 }

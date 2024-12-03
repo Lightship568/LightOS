@@ -18,6 +18,7 @@ enum device_subtype_t {
     DEV_KEYBOARD,     // 键盘
     DEV_IDE_DISK,     // IDE 硬盘
     DEV_IDE_PART,     // 每个盘上的分区
+    DEV_RAMDISK,      // RAM DISK
 };
 
 #define REQUEST_READ 0   // 块设备读
