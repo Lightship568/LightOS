@@ -44,7 +44,22 @@ void builtin_logo() {
 }
 
 void builtin_test(int argc, char* argv[]) {
-    test();
+    // test();
+    u32 status;
+    // int *counter = (int*)mmap(0, sizeof(int), PROT_WRITE, 0, EOF, 0);
+    int *counter = (int*)mmap(0, sizeof(int), PROT_WRITE, MAP_SHARED, EOF, 0);
+    pid_t pid = fork();
+    if (pid){
+        while(true){
+            (*counter)++;
+            sleep(300);
+        }
+    }else{
+        while(true){
+            printf("counter %d\n", *counter);
+            sleep(100);
+        }
+    }
 }
 
 void readline(char* buf, u32 count) {

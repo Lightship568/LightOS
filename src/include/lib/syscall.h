@@ -1,13 +1,12 @@
 #ifndef LIGHTOS_SYSCALL_H
 #define LIGHTOS_SYSCALL_H
 
-#include <sys/types.h>
 #include <lightos/stat.h>
+#include <sys/types.h>
 
 #define NR_SYSCALL 256
 
-typedef enum syscall_t
-{
+typedef enum syscall_t {
     SYS_NR_TEST,
     SYS_NR_EXIT = 1,
     SYS_NR_FORK = 2,
@@ -77,19 +76,38 @@ typedef enum syscall_t
     SYS_NR_MKFS = NR_SYSCALL - 1,
 } syscall_t;
 
+enum mmap_type_t {
+    PROT_NONE = 0,
+    PROT_READ = 1,
+    PROT_WRITE = 2,
+    PROT_EXEC = 4,
+
+    MAP_SHARED = 1,
+    MAP_PRIVATE = 2,
+    MAP_FIXED = 0x10,
+};
+
+typedef struct mmap_args {
+    void* addr;
+    size_t length;
+    int prot;
+    int flags;
+    int fd;
+    off_t offset;
+} mmap_args;
 
 void test(void);
 void yield(void);
 void sleep(u32 ms);
-int32 read(fd_t fd, char *buf, u32 count);
-int32 write(fd_t fd, char *buf, u32 count);
+int32 read(fd_t fd, char* buf, u32 count);
+int32 write(fd_t fd, char* buf, u32 count);
 int32 brk(void* addr);
 pid_t getpid();
 pid_t getppid();
 pid_t fork();
 void exit(u32 status);
 pid_t waitpid(pid_t pid, int32* status, int32 options);
-time_t time(); // return seconds from 1970.01.01
+time_t time();  // return seconds from 1970.01.01
 mode_t umask(mode_t mask);
 int mkdir(char* pathname, int mode);
 int rmdir(char* pathname);
@@ -109,5 +127,12 @@ int mknod(char* filename, int mode, int dev);
 int mount(char* devname, char* dirname, int flags);
 int umount(char* target);
 int mkfs(char* devname, int icount);
+void* mmap(void* addr,
+           size_t length,
+           int prot,
+           int flags,
+           int fd,
+           off_t offset);
+int munmap(void* addr, size_t length);
 
 #endif

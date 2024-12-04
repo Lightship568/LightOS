@@ -72,6 +72,8 @@ void syscall_init(void) {
     syscall_table[SYS_NR_MOUNT] = sys_mount;
     syscall_table[SYS_NR_UMOUNT] = sys_umount;
     syscall_table[SYS_NR_MKFS] = sys_mkfs;
+    syscall_table[SYS_NR_MMAP] = sys_mmap;
+    syscall_table[SYS_NR_MUNMAP] = sys_munmap;
 
 
     DEBUGK("Syscall initialized\n");

@@ -26,11 +26,13 @@ void move_to_user_mode(void) {
      * 若想要完全利用前3G的虚拟地址，则需要分配3G/128M=24个页作为buf
      * 现代linux采用mm_struct中的红黑树VMA分段进行管理
      * 位图管理的方式空间时间效率太低、且没有权限标注，是古老的管理方式
-     * 因此目前仅用一个页的大小做测试（单进程最大虚拟地址128M）
+     *
+     * vmap 仅用于管理 mmap 内存，位于 [128M,254M)
      *  */
     task->vmap = kmalloc(sizeof(bitmap_t));
     void* buf = (void*)alloc_kpage(1);
-    bitmap_init(task->vmap, buf, PAGE_SIZE, 0);
+    bitmap_init(task->vmap, buf, (USER_MMAP_SIZE / PAGE_SIZE / 8),
+                (USER_MMAP_ADDR / PAGE_SIZE));
 
     // 切换为独立页表（init自己拷贝自己），此时无用户态页，本质就是内核地址共享
     copy_pde(task);
@@ -80,10 +82,10 @@ void init_uthread(void) {
     while (true) {
         u32 status;
         pid_t pid = fork();
-        if (pid){
+        if (pid) {
             pid_t child = waitpid(pid, &status, -1);
             printf("wait pid %d status %d %d\n", child, status, time());
-        }else{
+        } else {
             lsh_main();
         }
     }

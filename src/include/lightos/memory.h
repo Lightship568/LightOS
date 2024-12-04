@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/global.h>
 #include <lightos/task.h>
+#include <lib/syscall.h>
 
 #define MEMORY_BASE 0x100000    // 1M 可用内存起始地址
 
@@ -25,10 +26,16 @@
 #define KERNEL_RAMDISK_VADDR (KERNEL_PAGE_CACHE_VADDR + KERNEL_PAGE_CAHCE_SIZE) // 12M-16M 为 RAMDISK
 #define KERNEL_RAMDISK_SIZE 0x400000
 
-// 用户栈顶地址 128M（受限于一页的vmap->buf限制）
-#define USER_STACK_TOP (0x8000000 - 1)
-// 用户栈底地址，最大栈 1M，[0x7F00000, 0x8000000)
-#define USER_STACK_BOTTOM (USER_STACK_TOP - 0x100000) // 0x7F00000 -1
+// 用户栈顶地址 256M（不使用 vmap 跟踪，不受 128M 上限限制）
+#define USER_STACK_TOP (0x10000000 - 1)
+// 用户栈底地址，最大栈 2M，[0xFE00000, 0x10000000)
+#define USER_STACK_BOTTOM (USER_STACK_TOP - 0x200000)
+// 用户程序起始地址
+#define USER_EXEC_ADDR 0
+// 用户映射内存开始位置 128M
+#define USER_MMAP_ADDR 0x8000000
+// 用户映射内存大小 126M [128M, 254M)
+#define USER_MMAP_SIZE (USER_STACK_BOTTOM - USER_MMAP_ADDR)
 
 typedef struct page_entry_t {
     u8 present : 1;  // 在内存中
@@ -94,5 +101,9 @@ void page_fault(int vector, u32 edi, u32 esi, u32 ebp, u32 esp, u32 ebx, u32 edx
 
 // 系统调用 brk
 int32 sys_brk(void* addr);
+
+// syscall: mmap & munmap
+void* sys_mmap(mmap_args* args);
+int sys_munmap(void* addr, size_t length);
 
 #endif

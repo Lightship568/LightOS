@@ -4,7 +4,13 @@ LightOS 操作系统开发日志
 
 ---
 
-指导 @踌躇月光，https://www.bilibili.com/video/BV1Wr4y1i7kq/。
+指导 @踌躇月光：https://www.bilibili.com/video/BV1Wr4y1i7kq/。
+
+---
+
+## 大道至简，殊途同归
+
+## Great Minds Think Alike
 
 ---
 
@@ -2827,7 +2833,25 @@ mount /dev/hdb1 /mnt #测试一切正常
 
 需要注意一点，需要对特殊的 ramfs 比如 /dev 进行保护，防止 umount。目前采用的方法是 umount 时做 dev 号检查，但是这种 list 查表不是很高效。此外如果init进程在初始化时打开了标准流，那么此时 /dev 中应该是保持 inode 打开的状态，应该是本来就无法卸载（linux测试发现显示设备正忙，也是这个原因？），可能不需要做特殊检查了。
 
+## mmap
 
+用户态布局很熟就不放了，mmap 地址设置到 0x8000000 也就是128M 的位置，栈顶自然是 3G。
 
+mmap支持的参数较多，这里只实现 共享内存 和 私有内存。
 
+* https://man7.org/linux/man-pages/man2/mmap.2.html
+* 这篇文章很不错：https://cnblogs.com/huxiao-tee/p/4660352.html
 
+本质上是将 磁盘文件 与 虚拟地址 建立了联系，也可以理解为延迟拷贝，与延迟加载二进制是殊途同归的，在发生缺页中断时触发磁盘拷贝，所以本质上少了一次 OS -> user 的拷贝（读写文件都是 磁盘 -> cache + cache -> user 的两次拷贝）。
+
+所以主要需要写文件与虚拟地址绑定的功能，也就是 remap_pfn_range
+
+**发现一个问题，进程的 vmap 位图仅分配一个页，最大支持128M内存，但是 Onix 却设置栈顶 256M，而且 link_user_page 不从 vmap 中扫描，vmap 只在 mmap 相关逻辑才出现。此外之前的 exit 代码对程序内存的释放是通过遍历 pte 实现的，理论上确实用不到 vmap。**
+
+**删除了 link/unlink_user_page 关于 vmap 的操作，确认 vmap 仅作用于 mmap 相关逻辑。**
+
+**这样处理可以使得程序栈虚拟地址超过 128M 的限制，并在 init 中初始化 vmap 偏移为 128M，从而将 MMAP 设置为 128M**
+
+目前来说，参考 onix 的实现，并没有建立磁盘文件与用户地址的联系，无法通过 pf 触发文件自动读取，而是直接 mmap 时将目标直接读入文件到这个用户选定的地址范围，不够优雅，后面应该会再改。
+
+* 视频提到的一个快表刷新，没看懂原理：https://www.bilibili.com/video/BV1TY411d7Fp?t=924.3
