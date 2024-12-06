@@ -1589,7 +1589,7 @@ if (fg_task != NULL){
 
 ## IA-32 TSS
 
-![image-20241014165133259](D:\Markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\image-20241014165133259.png)
+![image-20241014165133259](.\markdown_img\image-20241014165133259.png)
 
 TR （Task Register）寄存器用来储存 TSS Descriptor，也就是任务状态段描述符，其中，Type 中的 B 位标识任务是否繁忙。CPU 使用 ltr 指令加载 TSSD
 
@@ -1599,7 +1599,7 @@ ltr
 
 
 
-![image-20241014191604795](D:\Markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\image-20241014191604795.png)
+![image-20241014191604795](.\markdown_img\image-20241014191604795.png)
 
 **实际上，在使用软件任务上下文切换的形势下，使用 TSS 的目的就是为了通过设置 ss0 和 esp0，让用户态程序可以由中断自动转为内核态（栈）。**
 
@@ -1621,7 +1621,7 @@ ltr
 
 与之前的中断上下文不同，如果是从用户中断进入内核，则硬件自动压栈了ss3和esp3两个用户态栈值。move_to_user 自然要模拟这样一个栈后 ROP 返回 Ring3。
 
-![image-20241014204246768](D:\Markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\image-20241014204246768.png)
+![image-20241014204246768](.\markdown_img\image-20241014204246768.png)
 
 现在实现思路比较怪，有两条思路。
 
@@ -2211,7 +2211,7 @@ make umount DEV=/dev/loop3
 * https://zhuanlan.zhihu.com/p/466712079：非常细节，全面覆盖，解答了很多疑惑。
 * https://segmentfault.com/a/1190000023615225，还没看
 
-![img](D:\Markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\v2-bd10f8397d703f5992e06ac90c81d0f2_1440w.jpg)
+![img](.\markdown_img\v2-bd10f8397d703f5992e06ac90c81d0f2_1440w.jpg)
 
 ### 磁盘分配组织模式
 
@@ -2321,7 +2321,7 @@ typedef struct super_desc_t
 
 磁盘每个分区下的块情况：
 
-![image-20241106170246780](D:\Markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\image-20241106170246780.png)
+![image-20241106170246780](.\markdown_img\image-20241106170246780.png)
 
 目录的inode结构
 
@@ -2423,7 +2423,7 @@ typedef struct super_block_t {
 
 inode->zmap 的直接块、一级间接块、二级间接块逻辑如下图所示：
 
-![image-20241119110800715](D:\Markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\文件系统)
+![image-20241119110800715](.\markdown_img\文件系统)
 
 ### 实现功能
 
@@ -2557,7 +2557,7 @@ buffer_t *add_entry(inode_t *dir, const char *name, dentry_t **result);
 
 其中，比较复杂的两个问题是：需要设置谁的 pcache->dirty？nlinks 是什么情况？
 
-![image-20241123141914187](D:\Markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\image-20241123141914187.png)
+![image-20241123141914187](.\markdown_img\image-20241123141914187.png)
 
 * 观察黑线可得，子目录 nlinks 为 2，一条来自父目录 dentry 的 new_dir，另一条来自 '.'，而父目录因子目录的 '..' 而使 nlinks +1。
 
@@ -2746,7 +2746,7 @@ OS 启动时，将所有已经注册好的设备设置到 /dev 目录下，设�
 
 这地方指针有点乱，画个图。
 
-![image-20241130144625599](D:\Markdown\OpreatingSystem\LightOS\develop_dialog\markdown_img\mount.png)
+![image-20241130144625599](.\markdown_img\mount.png)
 
 注意如果是主文件系统的根目录，则 imount 和 iroot 都指向 nr = 1 的根 inode，根 inode 的 mount 设置为当前根设备的 dev。
 
@@ -2854,4 +2854,19 @@ mmap支持的参数较多，这里只实现 共享内存 和 私有内存。
 
 目前来说，参考 onix 的实现，并没有建立磁盘文件与用户地址的联系，无法通过 pf 触发文件自动读取，而是直接 mmap 时将目标直接读入文件到这个用户选定的地址范围，不够优雅，后面应该会再改。
 
-* 视频提到的一个快表刷新，没看懂原理：https://www.bilibili.com/video/BV1TY411d7Fp?t=924.3
+* 视频提到的一个快表刷新，没看懂为何要连续两次 flush_table：https://www.bilibili.com/video/BV1TY411d7Fp?t=924.3。他的这个代码逻辑太混乱，我没看懂 copy_page 的含义以及为何要两次对 0 vaddr 的地址进行 flush_table，我感觉是 bug。LightOS 设计的拷贝页表的逻辑与其不同，只拷贝页表，且目前没出什么问题。
+
+## 总结
+
+文件系统的开发至此暂时告一段落了，基础功能都已经有了，但仍然存在一些不足。
+
+* 没有实现 remap_pfn_range，即无法将文件与内存加载地址联系起来，因此暂时无法实现懒加载，也因此 mmap 效率不高（直接读入全部目标）。
+* COW 的中断处理不够完善，没有增加对**共享页**的完善判断，也无法支持 remap_pfn_range。
+* 文件系统采用 MINIX V1 标准，支持最大磁盘空间（分区）受限于 16 位 LBA * BlockSize 1K，只有 2^26 = 64 M。而最大文件大小却有 (7+512+512 * 512) * 1K ≈ 256M，远大于 64M。其实这个原因只是因为二级索引固定要有512*512，是以页为单位分配的，没法再减了。
+* 系统调用没有对参数进行完善校验，而是用了大量的 assert，这是为了方便开发。后续不能过于信任用于空间传入的参数，需要完善参数校验逻辑。
+* ialloc 和 balloc 没有增加 **磁盘已满导致的扫描新块失败** 的逻辑。
+
+# ELF
+
+参考 ELF 手册： [elf.pdf](elf.pdf) 
+

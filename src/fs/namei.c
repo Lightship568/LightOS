@@ -145,10 +145,6 @@ cache_t* add_entry(inode_t* dir, const char* name, dentry_t** result) {
         }
 
         // 已扫描一遍 nr 都非 0，增加新的 dentry
-        /**
-         * todo: 我认为这里需要判断是否大于当前数据块，可能需要为该目录 inode
-         * 分配新的数据块，不应直接修改大小。
-         */
         if (i * sizeof(dentry_t) >= dir->desc->size) {
             entry->nr = 0;
             dir->desc->size = (i + 1) * sizeof(dentry_t);
