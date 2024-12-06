@@ -124,6 +124,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/fs/stat.o			\
 	$(BUILD)/fs/dev.o			\
 	$(BUILD)/kernel/ramdisk.o	\
+	$(BUILD)/kernel/execve.o	\
 
 	$(shell mkdir -p $(dir $@))
 	ld ${LDFLAGS} $^ -o $@
@@ -136,6 +137,9 @@ $(BUILD)/system.map: $(BUILD)/kernel.bin
 	nm $< | sort > $@
 
 
+
 include utils/image.mk
+
+include utils/buildroot.mk
 
 include utils/cmd.mk 

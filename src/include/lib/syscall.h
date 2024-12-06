@@ -134,5 +134,6 @@ void* mmap(void* addr,
            int fd,
            off_t offset);
 int munmap(void* addr, size_t length);
+int execve(char* filename, char*argv[],char* envp[]);
 
 #endif

@@ -26,15 +26,15 @@
 #define KERNEL_RAMDISK_VADDR (KERNEL_PAGE_CACHE_VADDR + KERNEL_PAGE_CAHCE_SIZE) // 12M-16M 为 RAMDISK
 #define KERNEL_RAMDISK_SIZE 0x400000
 
-// 用户栈顶地址 256M（不使用 vmap 跟踪，不受 128M 上限限制）
-#define USER_STACK_TOP (0x10000000 - 1)
-// 用户栈底地址，最大栈 2M，[0xFE00000, 0x10000000)
+// 用户栈顶地址 3G - 1（不使用 vmap 跟踪，不受 128M 上限限制）
+#define USER_STACK_TOP (KERNEL_PAGE_DIR_VADDR - 1)
+// 用户栈底地址，最大栈 2M
 #define USER_STACK_BOTTOM (USER_STACK_TOP - 0x200000)
-// 用户程序起始地址
-#define USER_EXEC_ADDR 0
-// 用户映射内存开始位置 128M
-#define USER_MMAP_ADDR 0x8000000
-// 用户映射内存大小 126M [128M, 254M)
+// 用户程序起始地址 128M
+#define USER_EXEC_ADDR (0x08048000) 
+// 用户映射内存开始位置 256M
+#define USER_MMAP_ADDR (0x10000000)
+// 用户映射内存大小 3G-2M-256M
 #define USER_MMAP_SIZE (USER_STACK_BOTTOM - USER_MMAP_ADDR)
 
 typedef struct page_entry_t {

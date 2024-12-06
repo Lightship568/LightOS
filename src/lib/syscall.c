@@ -191,3 +191,7 @@ void* mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
 int munmap(void* addr, size_t length){
     return _syscall2(SYS_NR_MUNMAP, (u32)addr, (u32)length);
 }
+
+int execve(char* filename, char*argv[],char* envp[]){
+    return _syscall3(SYS_NR_EXECVE, (u32)filename, (u32)argv, (u32)envp);
+}

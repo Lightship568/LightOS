@@ -45,21 +45,22 @@ void builtin_logo() {
 
 void builtin_test(int argc, char* argv[]) {
     // test();
-    u32 status;
-    // int *counter = (int*)mmap(0, sizeof(int), PROT_WRITE, 0, EOF, 0);
-    int *counter = (int*)mmap(0, sizeof(int), PROT_WRITE, MAP_SHARED, EOF, 0);
-    pid_t pid = fork();
-    if (pid){
-        while(true){
-            (*counter)++;
-            sleep(300);
-        }
-    }else{
-        while(true){
-            printf("counter %d\n", *counter);
-            sleep(100);
-        }
-    }
+    // u32 status;
+    // // int *counter = (int*)mmap(0, sizeof(int), PROT_WRITE, 0, EOF, 0);
+    // int *counter = (int*)mmap(0, sizeof(int), PROT_WRITE, MAP_SHARED, EOF, 0);
+    // pid_t pid = fork();
+    // if (pid){
+    //     while(true){
+    //         (*counter)++;
+    //         sleep(300);
+    //     }
+    // }else{
+    //     while(true){
+    //         printf("counter %d\n", *counter);
+    //         sleep(100);
+    //     }
+    // }
+    execve("/hello.out", 0, 0);
 }
 
 void readline(char* buf, u32 count) {
@@ -240,7 +241,7 @@ static void builtin_ls(int argc, char* argv[]) {
 
             printf("%s ", buf);
             strftime(statbuf.mtime, buf);
-            printf("% 2d %2d %2d %2d %s %s\n", statbuf.nlinks, statbuf.uid,
+            printf("% 2d %4d %4d %4d %s %s\n", statbuf.nlinks, statbuf.uid,
                    statbuf.gid, statbuf.size, buf, dir->name);
         }
         if (!is_list){

@@ -176,7 +176,9 @@ inode_t* named(char* pathname, char** next) {
     // 绝对路径与相对路径判断
     if (IS_SEPARATOR(left[0])) {
         inode = task->iroot;
-        left++;
+        do{
+            left++;
+        } while(IS_SEPARATOR(left[0]));
     } else if (left[0]) {
         inode = task->ipwd;
     } else {

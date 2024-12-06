@@ -2870,3 +2870,121 @@ mmap支持的参数较多，这里只实现 共享内存 和 私有内存。
 
 参考 ELF 手册： [elf.pdf](elf.pdf) 
 
+![image-20241206150502808](.\markdown_img\image-20241206150502808.png)
+
+## 前期准备
+
+### Section & Segment
+
+> ELF（Executable and Linkable Format）文件中的**section**和**segment**是两个不同的概念，虽然它们都用于描述程序的内存布局和数据结构，但它们的用途和作用不同。
+>
+> ### 1. Section（节）
+>
+> - **定义**：Section 是在 ELF 文件内部对程序或数据的逻辑划分，通常是与源代码相关的内容。
+> - **目的**：Section 存储的是编译器生成的符号、调试信息、静态数据等。它们在编译和链接阶段很重要，但在程序加载时可能并不直接映射到内存中。
+> - **类型**：常见的 section 类型包括：
+>   - `.text`：存放程序代码（机器指令）。
+>   - `.data`：存放已初始化的全局变量和静态变量。
+>   - `.bss`：存放未初始化的全局变量和静态变量。
+>   - `.rodata`：存放只读数据（如字符串常量）。
+>   - `.symtab`：符号表，包含变量和函数的符号信息。
+>   - `.strtab`：字符串表，包含符号的字符串表示。
+> - **大小和位置**：每个 section 的大小和位置可以在 ELF 文件的头部信息中找到，链接器（如 `ld`）根据这些信息来生成最终的 ELF 文件。
+>
+> ### 2. Segment（段）
+>
+> - **定义**：Segment 是在 ELF 文件中用于描述程序运行时如何加载到内存中的区域。它是操作系统加载器的视角，指示操作系统如何将文件的内容映射到内存地址。
+> - **目的**：Segment 主要用于描述程序的内存映射，它定义了程序加载到内存后的虚拟地址空间布局。
+> - **类型**：常见的 segment 类型包括：
+>   - **LOAD**：可加载的段，包含程序的实际代码和数据。
+>   - **INTERP**：包含动态链接器路径的段。
+>   - **DYNAMIC**：动态链接信息段，用于动态链接时加载库。
+>   - **NOTE**：附加信息段（如补充信息，可能用于内核或调试信息）。
+> - **大小和位置**：Segment 的位置和大小通常由操作系统的加载器根据 ELF 文件头中的 `Program Header` 来决定，加载器负责将这些段映射到进程的虚拟地址空间中。
+>
+> ### 区别总结：
+>
+> - **作用**：
+>   - **Section**：用于描述编译和链接期间的文件组织结构，操作系统加载程序时不直接关注这些。
+>   - **Segment**：描述程序运行时的内存布局，加载器关心的是段的映射，程序运行时的内存使用由这些段决定。
+> - **加载方式**：
+>   - **Section**：通常不会直接映射到内存，它们主要用于链接时的信息处理。
+>   - **Segment**：直接影响程序在内存中的布局，加载器会根据 segment 的信息将文件内容加载到进程的虚拟地址空间。
+> - **关系**：一个 ELF 文件可以有多个 section 和 segment，它们之间的映射可能不是一一对应的。一个 segment 可能包含多个 section（比如代码和数据），并且一个 section 可能跨多个 segment。
+>
+> 简而言之，**section** 是源代码级别的逻辑分区，供链接器使用，而 **segment** 是运行时级别的内存映射分区，由加载器使用。
+
+### hello.out
+
+```bash
+$ readelf -e hello.out 
+ELF Header:
+  Magic:   7f 45 4c 46 01 01 01 00 00 00 00 00 00 00 00 00 
+  Class:                             ELF32
+  Data:                              2's complement, little endian
+  Version:                           1 (current)
+  OS/ABI:                            UNIX - System V
+  ABI Version:                       0
+  Type:                              EXEC (Executable file)
+  Machine:                           Intel 80386
+  Version:                           0x1
+  Entry point address:               0x8049000
+  Start of program headers:          52 (bytes into file)
+  Start of section headers:          8728 (bytes into file)
+  Flags:                             0x0
+  Size of this header:               52 (bytes)
+  Size of program headers:           32 (bytes)
+  Number of program headers:         3
+  Size of section headers:           40 (bytes)
+  Number of section headers:         11
+  Section header string table index: 10
+
+Section Headers:
+  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
+  [ 0]                   NULL            00000000 000000 000000 00      0   0  0
+  [ 1] .text             PROGBITS        08049000 001000 000022 00  AX  0   0 16
+  [ 2] .data             PROGBITS        0804a000 002000 000011 00  WA  0   0  4
+  [ 3] .bss              NOBITS          0804a014 002011 000400 00  WA  0   0  4
+  [ 4] .debug_aranges    PROGBITS        00000000 002011 000020 00      0   0  1
+  [ 5] .debug_info       PROGBITS        00000000 002031 000045 00      0   0  1
+  [ 6] .debug_abbrev     PROGBITS        00000000 002076 00001b 00      0   0  1
+  [ 7] .debug_line       PROGBITS        00000000 002091 000048 00      0   0  1
+  [ 8] .symtab           SYMTAB          00000000 0020dc 000090 10      9   5  4
+  [ 9] .strtab           STRTAB          00000000 00216c 000048 00      0   0  1
+  [10] .shstrtab         STRTAB          00000000 0021b4 000061 00      0   0  1
+Key to Flags:
+  W (write), A (alloc), X (execute), M (merge), S (strings), I (info),
+  L (link order), O (extra OS processing required), G (group), T (TLS),
+  C (compressed), x (unknown), o (OS specific), E (exclude),
+  D (mbind), p (processor specific)
+
+Program Headers:
+  Type           Offset   VirtAddr   PhysAddr   FileSiz MemSiz  Flg Align
+  LOAD           0x000000 0x08048000 0x08048000 0x00094 0x00094 R   0x1000
+  LOAD           0x001000 0x08049000 0x08049000 0x00022 0x00022 R E 0x1000
+  LOAD           0x002000 0x0804a000 0x0804a000 0x00011 0x00414 RW  0x1000
+
+ Section to Segment mapping:
+  Segment Sections...
+   00     
+   01     .text 
+   02     .data .bss 
+```
+
+### 地址布局问题
+
+由于是 32 位 elf，链接器默认程序加载点是 0x08048000 （128M+0x48000），这与之前的地址配置不符（用户映射内存开始位置 128M，用户栈顶地址 256M）。我的目标是兼容其他已有的 elf 使得 LightOS 能够运行大部分 32 位程序，但其默认加载点是一个问题，所以需要修改当前用户空间布局如下，后面如果有其他问题也可以随时修改：
+
+```c
+// 用户栈顶地址 3G - 1（不使用 vmap 跟踪，不受 128M 上限限制）
+#define USER_STACK_TOP (KERNEL_PAGE_DIR_VADDR - 1)
+// 用户栈底地址，最大栈 2M
+#define USER_STACK_BOTTOM (USER_STACK_TOP - 0x200000)
+// 用户程序起始地址 128M
+#define USER_EXEC_ADDR (0x08048000) 
+// 用户映射内存开始位置 256M
+#define USER_MMAP_ADDR (0x10000000)
+// 用户映射内存大小 3G-2M-256M
+#define USER_MMAP_SIZE (USER_STACK_BOTTOM - USER_MMAP_ADDR)
+```
+

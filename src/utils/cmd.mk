@@ -22,12 +22,15 @@ QEMU_CDROM+= -drive file=$(BUILD)/LightOS.img,if=ide,index=1,media=disk,format=r
 
 QEMU_DEBUG:=-s -S
 
+# buildroot 依赖 images，仅编译 images 会重置清空 buildroot
+ALL:= images buildroot
+
 .PHONY: qemu
-qemu: $(IMAGES)
+qemu: $(ALL)
 	$(QEMU) $(QEMU_DISK_BOOT)
 
 .PHONY: qemug
-qemug: $(IMAGES)
+qemug: $(ALL)
 	$(QEMU) $(QEMU_DISK_BOOT) $(QEMU_DEBUG)
 
 # .PHONY: qemu-grub
