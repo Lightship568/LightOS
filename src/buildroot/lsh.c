@@ -44,23 +44,7 @@ void builtin_logo() {
 }
 
 void builtin_test(int argc, char* argv[]) {
-    // test();
-    // u32 status;
-    // // int *counter = (int*)mmap(0, sizeof(int), PROT_WRITE, 0, EOF, 0);
-    // int *counter = (int*)mmap(0, sizeof(int), PROT_WRITE, MAP_SHARED, EOF, 0);
-    // pid_t pid = fork();
-    // if (pid){
-    //     while(true){
-    //         (*counter)++;
-    //         sleep(300);
-    //     }
-    // }else{
-    //     while(true){
-    //         printf("counter %d\n", *counter);
-    //         sleep(100);
-    //     }
-    // }
-    execve("/hello.out", 0, 0);
+
 }
 
 void readline(char* buf, u32 count) {
@@ -221,10 +205,10 @@ static void builtin_ls(int argc, char* argv[]) {
                 continue;
             }
             if (!is_list) {
-                if (is_first_print){
+                if (is_first_print) {
                     printf("%s", dir->name);
                     is_first_print = false;
-                }else{
+                } else {
                     printf(" %s", dir->name);
                 }
                 continue;
@@ -244,7 +228,7 @@ static void builtin_ls(int argc, char* argv[]) {
             printf("% 2d %4d %4d %4d %s %s\n", statbuf.nlinks, statbuf.uid,
                    statbuf.gid, statbuf.size, buf, dir->name);
         }
-        if (!is_list){
+        if (!is_list) {
             printf("\n");
         }
     }
@@ -341,8 +325,24 @@ static void builtin_mkfs(int argc, char* argv[]) {
     }
     if (mkfs(argv[1], atoi(argv[2]))) {
         printf("error mkfs %s\n", argv[1]);
-    }else{
+    } else {
         printf("success\n");
+    }
+}
+
+static void builtin_exec(int argc, char* argv[]) {
+    if (argc < 2) {
+        return;
+    }
+    int status;
+    pid_t pid = fork();
+    if (pid) {
+        pid_t child = waitpid(pid, &status, 0);
+        printf("wait pid %d status %d at time %d \n", child, status, time());
+    } else {
+        // execve 执行成功不会返回，失败才会返回，手动退出。
+        int i = execve(argv[1], NULL, NULL);
+        exit(i);
     }
 }
 
@@ -378,6 +378,8 @@ static void execute(int argc, char* argv[]) {
         return builtin_umount(argc, argv);
     } else if (!strcmp(line, "mkfs")) {
         return builtin_mkfs(argc, argv);
+    } else if (!strcmp(line, "exec")) {
+        return builtin_exec(argc, argv);
     }
     printf("lsh: commnand not fount: %s\n", argv[0]);
 }

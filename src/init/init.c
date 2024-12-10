@@ -63,11 +63,9 @@ void move_to_user_mode(void) {
 
     iframe->error = LIGHTOS_MAGIC;
 
-    iframe->eip =
-        (u32)init_uthread;  // 当前的 GDT 中 USER_CODE 是可以执行内核代码的
+    // 当前的 GDT 中 USER_CODE 是可以执行内核代码的
+    iframe->eip = (u32)init_uthread;
     iframe->eflags = (0 << 12 | 0b10 | 1 << 9);  // IOPL=0, 固定1, IF中断开启
-    // iframe->esp = ((u32)alloc_kpage(1) + PAGE_SIZE);
-    // //暂时用一个内核页放用户栈
     iframe->esp = USER_STACK_TOP;
 
     asm volatile(
@@ -84,7 +82,8 @@ void init_uthread(void) {
         pid_t pid = fork();
         if (pid) {
             pid_t child = waitpid(pid, &status, -1);
-            printf("wait pid %d status %d %d\n", child, status, time());
+            printf("[init uthread] wait pid %d status %d at time %d\n", child,
+                   status, time());
         } else {
             lsh_main();
         }

@@ -15,9 +15,9 @@
 #define ZONE_VALID 1     // ards 可用区域
 #define ZONE_RESERVED 2  // ards 不可用区域
 
-#define GET_PAGE(addr) ((u32)addr & 0xFFFFF000)  // 获取地址所在页的地址
-#define IDX(addr) ((u32)addr >> 12)              // 获取 ards 页索引
-#define PAGE(idx) ((u32)idx << 12)  // 获取 idx 对应的页所在地址
+// #define GET_PAGE(addr) ((u32)addr & 0xFFFFF000)  // 获取地址所在页的地址
+#define IDX(addr) ((u32)addr >> 12)  // 获取 ards 页索引
+#define PAGE(idx) ((u32)idx << 12)   // 获取 idx 对应的页所在地址
 #define ASSERT_PAGE(addr) assert((addr & 0xfff) == 0)
 #define USED 100  // mem_map 已使用，学 linux 放一个大值
 
@@ -334,8 +334,7 @@ static void put_user_page(u32 paddr) {
  *
  ****************************************************************************************************************/
 
-// 刷新tlb快表
-static _inline void flush_tlb(u32 vaddr) {
+void flush_tlb(u32 vaddr) {
     asm volatile("invlpg (%0)\n" ::"r"(vaddr) : "memory");
 }
 
@@ -421,9 +420,10 @@ void copy_pte(task_t* target_task) {
 
 void free_pte(task_t* target_task) {
     page_entry_t* pde_entry;
+    page_entry_t* pte_base;
     page_entry_t* pte_entry;
     u32 pte_paddr;
-    pde_entry = (page_entry_t*)(target_task->pde + KERNEL_VADDR_OFFSET);
+    pde_entry = get_pde();
 
     size_t i = 0;
     // 用户页表释放（phy > 16M）
@@ -431,18 +431,23 @@ void free_pte(task_t* target_task) {
         if (!pde_entry->present)
             continue;
         pte_paddr = PAGE(pde_entry->index);
-        pte_entry = (page_entry_t*)kmap(pte_paddr);
+        pte_base = (page_entry_t*)kmap(pte_paddr);
+        pte_entry = pte_base;
         for (size_t j = 0; j < (PAGE_SIZE / sizeof(page_entry_t));
              ++j, pte_entry++) {
             if (!pte_entry->present)
                 continue;
             // 释放用户内存
             put_user_page(PAGE(pte_entry->index));
-            // 没清理进程 vmap，反正exit的后续都要释放掉
+            // pte 不需要置 0，仅 pde 置位就足够换新 pte 了
+            // 此外置 0 会导致 kunmap assert 失败
+            // pte_entry->present = false;
         }
-        kunmap((u32)pte_entry);
+        kunmap((u32)pte_base);
         // 释放 PT 所在页
         put_user_page(pte_paddr);
+        // 置 !present
+        pde_entry->present = false;
     }
 
     // 因为内核完全是共享的，不应该直接加解引用这么玩
@@ -464,10 +469,6 @@ void free_pte(task_t* target_task) {
     //         减少引用计数，归零则释放bitmap
     //     }
     // }
-
-    // 最后释放 PD
-    pde_entry = (page_entry_t*)(target_task->pde + KERNEL_VADDR_OFFSET);
-    free_kpage((u32)pde_entry, 1);
 }
 
 // kmap需要维护一个p-v的映射关系 kmap_poll，方便重入检查和unmap操作
@@ -544,7 +545,9 @@ u32 kunmap(u32 vaddr) {
 
     u32 idx = KMAP_GET_INDEX(vaddr);
 
-    assert(kmap_pool[idx].present);
+    if (!kmap_pool[idx].present) {
+        panic("???");
+    }
     kmap_pool[idx].present = 0;
     kmap_pool[idx].cnt--;
     if (kmap_pool[idx].cnt == 0) {
@@ -553,8 +556,7 @@ u32 kunmap(u32 vaddr) {
     }
 }
 
-// 用户态获取或创建进程pte entry，返回entry虚拟地址，注意调用方需要清理kmap
-static page_entry_t* get_pte(u32 vaddr) {
+page_entry_t* get_pte(u32 vaddr) {
     page_entry_t* pde = get_pde();
     u32 idx = PDE_IDX(vaddr);
     page_entry_t* entry = &pde[idx];
@@ -599,7 +601,7 @@ void link_user_page(u32 vaddr) {
 
     LOGK("Link new user page for 0x%x at 0x%x\n", vaddr, paddr_page);
 
-    kunmap(GET_PAGE(entry));  // 清理get_pte的kmap
+    kunmap(GET_PAGE(entry));  // 清理 get_pte 的 kmap
 }
 
 void unlink_user_page(u32 vaddr) {
@@ -683,12 +685,21 @@ void page_fault(int vector,
         assert(pte_entry->present);
         assert(pte_entry->index >= IDX(MEMORY_BASE));
         assert(mem_map[pte_entry->index]);
-        assert(!pte_entry->shared); // 共享页目前不会出现权限问题。
+        assert(!pte_entry->shared);  // 共享页目前不会出现权限问题。
         /**
          * 当然，这样设计对于之后的多引用计数的页来说是不合理的，
          * 但我目前想不到当前如何标记是CoW还是正常程序触发了页保护（不会在pcb加字段吧？）
          * 所以先这样，之后遇到共享页比如 IPC 或者动态链接库之后再说。
+         *
+         * 更新：增加 page_entry_t 的 readonly
+         * 字段来标志页本来的权限，解决了上述问题
          */
+
+        // 真正触发了不可写而非 COW
+        if (pte_entry->readonly) {
+            sys_exit(500);
+        }
+
         if (mem_map[pte_entry->index] == 1) {
             // fork的另一个进程已经PF并复制过了
             pte_entry->write = true;
@@ -741,9 +752,15 @@ int32 sys_brk(void* addr) {
     // 确保是用户进程
     assert(task->uid == USER_RING3);
 
-    // brk 与栈重叠
-    if (brk >= USER_STACK_BOTTOM) {
-        LOGK("brk >= USER_STACK_BOTTOM\n");
+    // brk 与 mmap 重叠
+    if (brk >= USER_MMAP_ADDR) {
+        LOGK("brk >= USER_MMAP_ADDR\n");
+        return -1;
+    }
+
+    // brk 不可小于 .end
+    if (brk < task->end) {
+        LOGK("brk < task->end\n");
         return -1;
     }
 
@@ -791,9 +808,12 @@ void* sys_mmap(mmap_args* args) {
 
         page_entry_t* entry = get_pte(page);
         entry->user = true;
-        entry->write = false;
         if (prot & PROT_WRITE) {
             entry->write = true;
+            entry->readonly = false;
+        } else {
+            entry->write = false;
+            entry->readonly = true;
         }
         if (flags & MAP_SHARED) {
             entry->shared = true;

@@ -37,6 +37,9 @@
 // 用户映射内存大小 3G-2M-256M
 #define USER_MMAP_SIZE (USER_STACK_BOTTOM - USER_MMAP_ADDR)
 
+
+#define GET_PAGE(addr) ((u32)addr & 0xFFFFF000)  // 获取地址所在页的地址
+
 typedef struct page_entry_t {
     u8 present : 1;  // 在内存中
     u8 write : 1;    // 0 只读 1 可读可写
@@ -55,6 +58,11 @@ typedef struct page_entry_t {
 
 // 设置 cr3 寄存器，参数是页目录的地址
 void set_cr3(u32 pde);    
+// 刷新tlb快表
+void flush_tlb(u32 vaddr);
+
+// 用户态获取或创建进程pte entry，返回entry虚拟地址，注意调用方需要清理kmap
+page_entry_t* get_pte(u32 vaddr);
 
 // 拷贝 current 进程 pde 到 target_task->pde
 void copy_pde(task_t* target_task);
@@ -63,7 +71,7 @@ void copy_pde(task_t* target_task);
 void copy_pte(task_t* target_task);
 
 // 对应 copy_pte，在程序exit时调用
-// 释放所有user_page, PTs, PD, 解引用内核共享mem_map（归零自动释放）
+// 释放所有用户页的 PTs, 但不释放内核 pte 和 pd
 void free_pte(task_t* target_task);
 
 // 主要是通过分析 bios 内存检测获取的内存信息计算页数据，参数来自 head.s 的 push

@@ -4,6 +4,7 @@
 #include <lib/list.h>
 #include <lightos/cache.h>
 #include <sys/types.h>
+#include <lightos/stat.h>
 
 // defined in cache.h
 // #define BLOCK_SIZE 1024  // 块大小
@@ -120,6 +121,13 @@ typedef enum whence_t {
     SEEK_CUR,      // 当前位置偏移
     SEEK_END       // 结束位置偏移
 } whence_t;
+
+#define P_EXEC IXOTH
+#define P_WRITE IWOTH
+#define P_READ IROTH
+
+// 检查权限
+bool permission(inode_t* inode, u16 mask);
 
 // 获取设备 dev 的超级块
 super_block_t* get_super(dev_t dev);

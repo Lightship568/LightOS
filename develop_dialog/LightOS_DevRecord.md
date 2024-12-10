@@ -2988,3 +2988,29 @@ Program Headers:
 #define USER_MMAP_SIZE (USER_STACK_BOTTOM - USER_MMAP_ADDR)
 ```
 
+## 加载执行
+
+当前布局如下：
+
+![elf_execve](.\markdown_img\elf_execve.png)
+
+### 过程
+
+1. namei 找 elf 节点
+2. 改名
+3. 清理 fork 后的残留资源
+4. 加载 elf，根据其描述的加载段 link_user_page，并主动读入（尚未实现 PF 懒加载）
+5. 设置 PCB 一系列参数，如 brk，iexec
+6. 构造 iframe 中断返回栈帧，rop 开始执行
+
+### 一些细节
+
+我认为在加载新进程的时候需要释放掉 fork 的信息，具体包括：
+
+* task->pwd：sys_chdir 修改为 elf 所在路径
+* task->iroot 不变，task->iexec 要释放掉并设置为新 elf 的 inode
+* 释放所有打开的文件，但标准流不释放
+* 使用 free_pte 释放掉所有进程用户页，并使用 set_cr3 快速刷新 tlb
+* todo：根据 task->vmap 释放掉 mmap
+
+**注：execve 和 exit 都没有实现对 mmap 的取消映射，感觉仅靠一个 vmap 的位图不太好搞，先放一放，后面再说**。

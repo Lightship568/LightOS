@@ -85,6 +85,9 @@ typedef struct task_t {
     list_node_t node;                    // 链表
     struct bitmap_t* vmap;               // 进程虚拟内存位图
     tss_t tss;                           // TSS
+    u32 text;                            // 代码段地址
+    u32 data;                            // 数据段地址
+    u32 end;                             // 程序结束地址
     u32 brk;                             // 进程堆内存最高地址
     int32 status;                        // 进程特殊状态
     pid_t waitpid;                       // 进程等待的 pid
@@ -92,6 +95,7 @@ typedef struct task_t {
     size_t pwd_len;                      // 当前目录字符串长度
     struct inode_t* ipwd;                // 进程当前目录 inode
     struct inode_t* iroot;               // 进程根目录 inode
+    struct inode_t* iexec;               // 程序二进制文件 inode
     u16 umask;                           // 进程用户权限
     struct file_t* files[TASK_FILE_NR];  // 进程文件表
     u32 magic;  // 检测内核栈溢出（溢出到 PCB 就寄了）

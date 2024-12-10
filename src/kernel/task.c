@@ -162,7 +162,11 @@ pid_t task_create(void (*eip_ptr)(void),
     task->priority = priority;
     task->uid = uid;
     task->gid = 0;  // todo: group
-    task->brk = 0;
+    task->brk = USER_EXEC_ADDR;
+    task->text = USER_EXEC_ADDR;
+    task->data = USER_EXEC_ADDR;
+    task->end = USER_EXEC_ADDR;
+    task->iexec = NULL;
     task->iroot = task->ipwd = get_root_inode();
     task->umask = 0022;  // 0755
     task->iroot->count += 2;
@@ -285,8 +289,7 @@ u32 sys_fork() {
     child->tss.eax = pid;
     child->tss.esp0 = (u32)child->stack;
 
-    // 创建并拷贝 PD 和 PTs
-    // copy_pde(child);
+    // 创建并拷贝 PTs（拷贝 PCB 使 pde 共享)
     copy_pte(child);
 
     // 拷贝vmap
@@ -305,6 +308,10 @@ u32 sys_fork() {
     // 工作目录引用计数
     task->ipwd->count++;
     task->iroot->count++;
+    // 本体二进制引用计数
+    if (task->iexec){
+        task->iexec->count++;
+    }
 
     // 文件引用计数
     for (size_t i = 0; i < TASK_FILE_NR; ++i) {
@@ -343,7 +350,7 @@ child_task:
 }
 
 u32 sys_exit(u32 status) {
-    // 需要释放的有：vmap, vmap->buf, PD, PTs, 以及 PTs 指向的所有 user_page
+    // 需要释放的有：vmap, vmap->buf, PD, PTs, 以及 PTs 指向的所有 user_page，以及 mmap
     // 无需释放：task_list[n],
     // task_t与内核栈所在页。这是因为延迟回收策略，便于父进程 waitpid
     task_t* task = get_current();
@@ -356,6 +363,9 @@ u32 sys_exit(u32 status) {
 
     // 释放所有user_page, PTs, PD
     free_pte(task);
+    free_kpage(task->pde + KERNEL_VADDR_OFFSET, 1);
+
+    // todo 释放掉 vmap 指向的所有 mmap 空间和文件
 
     // 释放vmap->buf
     free_kpage((u32)task->vmap->bits, 1);
@@ -368,9 +378,13 @@ u32 sys_exit(u32 status) {
     iput(task->ipwd);
     iput(task->iroot);
 
+    // 释放本体二进制inode
+    iput(task->iexec);
+
+    // 释放所有打开文件
     for (size_t i = 0; i < TASK_FILE_NR; ++i) {
         file_t* file = task->files[i];
-        if (file) {  // fd: 0,1,2 初始化时默认清零
+        if (file) {  // 标准流也要释放引用计数
             sys_close(i);
         }
     }

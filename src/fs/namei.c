@@ -2,17 +2,12 @@
 #include <lib/stdlib.h>
 #include <lib/string.h>
 #include <lightos/fs.h>
-#include <lightos/stat.h>
 #include <sys/assert.h>
 #include <sys/types.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
-#define P_EXEC IXOTH
-#define P_WRITE IWOTH
-#define P_READ IROTH
-
-static bool permission(inode_t* inode, u16 mask) {
+bool permission(inode_t* inode, u16 mask) {
     u16 mode = inode->desc->mode;
     if (!inode->desc->nlinks) {
         return false;
