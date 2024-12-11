@@ -35,7 +35,6 @@ void kernel_init(void) {
     time_init();
     clock_init();
     rtc_init();
-    serial_init();  // 初始化串口
 
     syscall_init();
 

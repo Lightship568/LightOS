@@ -27,6 +27,7 @@ header_end:
 extern kernel_init
 extern device_init
 extern console_init
+extern serial_init
 extern temp_gdt_init
 extern gdt_init
 extern gdt_ptr
@@ -74,6 +75,8 @@ _gdt_refresh_temp:
 _gdt_refresh:
 
     call device_init
+
+    call serial_init
 
     call console_init
 

@@ -29,11 +29,12 @@ void dev_init(void) {
     device = device_find(DEV_KEYBOARD, 0);
     sys_mknod("/dev/keyboard", IFCHR | IRUSR, device->dev);
 
-    // 列出所有块设备
+    // 列出所有设备
     char name[NAMELEN];
-    u32 subtype_list[] = {DEV_IDE_DISK, DEV_IDE_PART, DEV_RAMDISK};
+    u32 subtype_list[] = {DEV_IDE_DISK, DEV_IDE_PART, DEV_RAMDISK, DEV_SERIAL};
     size_t target = 0;
     size_t i = 0;
+    u32 file_mode;
     for (;;) {
         device = device_find(subtype_list[target], i++);
         if (!device) {
@@ -48,7 +49,9 @@ void dev_init(void) {
             continue;
         }
         sprintf(name, "/dev/%s", device->name);
-        sys_mknod(name, IFBLK | (IRUSR | IWUSR), device->dev);
+        // 字符设备与块设备
+        file_mode = subtype_list[target] == DEV_SERIAL ? IFCHR : IFBLK;
+        sys_mknod(name, file_mode | (IRUSR | IWUSR), device->dev);
     }
 
     // 初始化标准输入输出错误

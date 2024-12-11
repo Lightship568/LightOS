@@ -91,18 +91,8 @@ void init_uthread(void) {
 }
 
 void init_kthread(void) {
-    char str[11] = {0};
-    // printk("trying to read from keyboard\n");
-    // keyboard_read(NULL, str, 1);
-    // printk("read %d: %s\n", 1, str);
 
-    char* p = kmalloc(0x20);
-    memset(p, 'a', 0x20);
-    p[0x1F] = '\0';
-    printk("Test kmalloc: %s\n", p);
-    kfree(p);
-
-    printk("kernel address is 0x%p\n", &&high_check);
+    DEBUGK("kernel address is 0x%p\n", &&high_check);
 high_check:
 
     DEBUGK("init kthread move to user mode\n");

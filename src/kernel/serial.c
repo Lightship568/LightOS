@@ -114,7 +114,7 @@ int serial_write(serial_t* serial, char* buf, u32 count) {
 }
 
 // 初始化串口
-void serial_init() {
+void serial_init(void) {
     for (size_t i = 0; i < 2; i++) {
         serial_t* serial = &serials[i];
         kfifo_init(&serial->rx_fifo, serial->rx_buf, BUF_LEN);
