@@ -125,6 +125,8 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/fs/dev.o			\
 	$(BUILD)/kernel/ramdisk.o	\
 	$(BUILD)/kernel/execve.o	\
+	$(BUILD)/kernel/serial.o	\
+
 
 	$(shell mkdir -p $(dir $@))
 	ld ${LDFLAGS} $^ -o $@

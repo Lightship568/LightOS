@@ -44,7 +44,10 @@ void builtin_logo() {
 }
 
 void builtin_test(int argc, char* argv[]) {
-
+    printf("Test start\n");
+    while (true) {
+        test();
+    }
 }
 
 void readline(char* buf, u32 count) {

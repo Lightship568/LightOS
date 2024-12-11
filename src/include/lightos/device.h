@@ -16,6 +16,7 @@ enum device_type_t {
 enum device_subtype_t {
     DEV_CONSOLE = 1,  // 控制台
     DEV_KEYBOARD,     // 键盘
+    DEV_SERIAL,       // 串口
     DEV_IDE_DISK,     // IDE 硬盘
     DEV_IDE_PART,     // 每个盘上的分区
     DEV_RAMDISK,      // RAM DISK
