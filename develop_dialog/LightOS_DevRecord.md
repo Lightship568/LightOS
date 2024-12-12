@@ -3347,5 +3347,104 @@ QEMU+= -chardev udp,id=com2,port=6666,ipv4=on
 
 根据嵌入式的启动经验，我认为应该尽早初始化串口，可能要放在 console 初始化前面，使得所有启动日志都可以直接输出到 com1。没啥难度。
 
+# C 运行时环境
 
+> ISO C 标准定义了 `main` 函数 [^main] 可以定义为没有参数的函数，或者带有两个参数 `argc` 和 `argv` 的函数，表示命令行参数的数量和字符指针：
+>
+> ```c++
+> int main (int argc, char *argv[])
+> ```
+>
+> 而对于 UNIX 系统，`main` 函数的定义有第三种方式 [^unix_main]：
+>
+> ```c++
+> int main (int argc, char *argv[], char *envp[])
+> ```
+>
+> 其中，第三个参数 `envp` 表示系统环境变量的字符指针数组，环境变量字符串是形如 `NAME=value` 这样以 `=` 连接的字符串，比如 `SHELL=/bin/sh`。
+>
+> 在执行 `main` 函数之前，`libc` C 函数库需要首先为程序做初始化，比如初始化堆内存，初始化标准输入输出文件，程序参数和环境变量等，
+>
+> 在 main 函数结束之后，还需要做一些收尾的工作，比如执行 `atexit` [^atexit] 注册的函数，和调用 `exit` 系统调用，让程序退出。
+>
+> 所以 ld 默认的入口地址在 `_start`，而不是 `main`。
+>
+> C RunTime
+>
+> ## 参考
+>
+> [^main]: <https://en.cppreference.com/w/c/language/main_function>
+> [^unix_main]: <https://www.gnu.org/software/libc/manual/2.36/html_mono/libc.html#Program-Arguments>
+> [^atexit]: <https://en.cppreference.com/w/c/program/atexit>
+>
+
+## C 链接细节
+
+* 启动入口点需要 _start 标注，没有该符号无法链接（或者 -e 指定裸程序 entry）
+
+* crt.asm 负责提供 _start，引入 extern 的必要符号，并构造栈和参数，最后调用 crt1.c 中的 __libc_start_main
+
+  ```asm
+  [bits 32]
+  
+  section .text
+  global _start
+  
+  extern __libc_start_main
+  extern _init
+  extern _fini
+  extern main
+  
+  _start:
+      xor ebp, ebp; 清除栈底，表示程序开场
+      pop esi; 栈顶参数为 argc
+      mov ecx, esp; 其次为 argv
+  
+      and esp, -16; 栈对齐，SSE 需要 16 字节对齐
+      push eax; 感觉没什么用
+      push esp; 用户程序栈最大地址
+      push edx; 动态链接器
+      push _fini; libc 析构函数
+      push _init; libc 构造函数
+      push ecx; argv
+      push esi; argc
+      push main; 主函数
+  
+      call __libc_start_main
+  
+      ud2; 程序不可能走到这里，不然可能是其他什么地方有问题
+  ```
+
+* crt1.c 负责c++全局对象的构造和析构，获取 envp 偏移，调用 main 和 exit
+
+  ```c
+  #include <lib/string.h>
+  #include <lib/syscall.h>
+  #include <sys/types.h>
+  
+  int main(int argc, char** argv, char** envp);
+  
+  // libc 构造函数
+  weak void _init() {}
+  
+  // libc 析构函数
+  weak void _fini() {}
+  
+  int __libc_start_main(int (*main)(int argc, char** argv, char** envp),
+                        int argc,
+                        char** argv,
+                        void (*_init)(),
+                        void (*_fini)(),
+                        void (*ldso)(),  // 动态连接器
+                        void* stack_end) {
+      // argv[argc] 是 NULL，因此 envp = argv + argc + 1 指向环境变量的开始位置。
+      char** envp = argv + argc + 1; 
+      _init();
+      int i = main(argc, argv, envp);
+      _fini();
+      exit(i);
+  }
+  ```
+
+  
 

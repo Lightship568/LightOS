@@ -6,20 +6,23 @@ $(BUILD_ROOT_PATH)/%.o: $(SRC)/buildroot/%.asm
 	$(shell mkdir -p $(dir $@))
 	nasm -f elf32 $(DEBUG) $< -o $@
 
-# buildroot(*.c)
-# $(BUILD)/kernel/%.o: $(SRC)/init/%.c
-# 	$(shell mkdir -p $(dir $@))
-# 	gcc $(CFLAGS) $(DEBUG) $(INCLUDE) -c $< -o $@
+# buildroot (*.c)
+$(BUILD_ROOT_PATH)/%.o: $(SRC)/buildroot/%.c
+	$(shell mkdir -p $(dir $@))
+	gcc $(CFLAGS) $(DEBUG) $(INCLUDE) -c $< -o $@
 
-# buildroot(ld)
-$(BUILD_ROOT_PATH)/%.out: $(BUILD_ROOT_PATH)/%.o
+# buildroot (.out): libc.o + *.o => *.out
+$(BUILD_ROOT_PATH)/%.out:	\
+	$(BUILD_ROOT_PATH)/%.o	\
+	$(BUILD)/lib/libc.o
+
 	ld -m elf_i386 -static $^ -o $@
 
 
 .PHONY: buildroot
 buildroot: \
 	$(BUILD)/LightOS.img $(BUILD)/slave.img	\
-	$(BUILD_ROOT_PATH)/hello.out		\
+	$(BUILD_ROOT_PATH)/env.out		\
 
 
 # 创建 mount 文件夹
@@ -35,13 +38,14 @@ buildroot: \
 # 切换所有者
 	sudo chown ${USER} $(MNT_PATH)
 # 创建目录
+	mkdir -p $(MNT_PATH)/bin
 	mkdir -p $(MNT_PATH)/dev
 	mkdir -p $(MNT_PATH)/mnt
 #创建文件
 	echo "hello LightOS, from root directory!" > $(MNT_PATH)/hello.txt
 
 # Here to operate!
-	cp $(BUILD_ROOT_PATH)/hello.out $(MNT_PATH)/hello.out
+	cp $(BUILD_ROOT_PATH)/env.out $(MNT_PATH)/bin/env.out
 
 
 # 卸载文件系统与设备

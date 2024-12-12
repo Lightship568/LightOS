@@ -18,6 +18,8 @@ CFLAGS+= -fno-stack-protector	#不需要栈保护
 # CFLAGS+= -fomit-frame-pointer	#不需要栈帧
 # CFLAGS+= -mpreferred-stack-boundary=2	#不需要栈对齐
 # CFLAGS+= -fno-asynchronous-unwind-tables	#不需要 CFI 信息
+CFLAGS+= -DLIGHTOS				#定义LIGHTOS
+
 CFLAGS:=$(strip ${CFLAGS}) 		#去除\t
 
 DEBUG:= -g
@@ -56,20 +58,29 @@ $(BUILD)/lib/%.o: $(SRC)/lib/%.c
 	$(shell mkdir -p $(dir $@))
 	gcc $(CFLAGS) $(DEBUG) $(INCLUDE) -c $< -o $@
 
+# lib (*.asm)
+$(BUILD)/lib/%.o: $(SRC)/lib/%.asm
+	$(shell mkdir -p $(dir $@))
+	nasm -f elf32 $(DEBUG) $< -o $@
+	
 # fs (*.c)
 $(BUILD)/fs/%.o: $(SRC)/fs/%.c
 	$(shell mkdir -p $(dir $@))
 	gcc $(CFLAGS) $(DEBUG) $(INCLUDE) -c $< -o $@
 
-# buildroot (*.c)
-$(BUILD)/buildroot/%.o: $(SRC)/buildroot/%.c
-	$(shell mkdir -p $(dir $@))
-	gcc $(CFLAGS) $(DEBUG) $(INCLUDE) -c $< -o $@
 
-# lib (*.asm)
-$(BUILD)/lib/%.o: $(SRC)/lib/%.asm
-	$(shell mkdir -p $(dir $@))
-	nasm -f elf32 $(DEBUG) $< -o $@
+# 将 lib 下用户态 .o 打包成 libc
+$(BUILD)/lib/libc.o: 			\
+	$(BUILD)/lib/crt.o 			\
+	$(BUILD)/lib/crt1.o			\
+	$(BUILD)/lib/string.o		\
+	$(BUILD)/lib/vsprintf.o		\
+	$(BUILD)/lib/stdlib.o		\
+	$(BUILD)/lib/syscall.o		\
+	$(BUILD)/lib/printf.o		\
+	$(BUILD)/lib/assert.o		\
+
+	ld -m elf_i386 -r $^ -o $@
 
 # 链接时控制内存布局，增加 multiboot2 header
 LDFLAGS:= -m elf_i386 \
