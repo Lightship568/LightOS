@@ -72,6 +72,7 @@ void copy_pte(task_t* target_task);
 
 // 对应 copy_pte，在程序exit时调用
 // 释放所有用户页的 PTs, 但不释放内核 pte 和 pd
+// 不刷新 tlb，外层需要 set_cr3 全局刷新页表
 void free_pte(task_t* target_task);
 
 // 主要是通过分析 bios 内存检测获取的内存信息计算页数据，参数来自 head.s 的 push

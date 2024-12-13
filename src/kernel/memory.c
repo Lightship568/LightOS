@@ -9,8 +9,11 @@
 #include <sys/types.h>
 
 // 关闭 memory 的内核注释
-// #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
-#define LOGK(fmt, args...) ;
+#define LOGK(fmt, args...) DEBUGK(fmt, ##args)
+// #define LOGK(fmt, args...) ;
+#define LOGK_KMAP(fmt, args...) ;        // kmap 操作
+#define LOGK_ALLOC_OPTS(fmt, args...) ;  // 申请与释放相关操作
+#define LOGK_PT_OPTS(fmt, args...) DEBUGK(fmt, ##args)     // 页表相关操作
 
 #define ZONE_VALID 1     // ards 可用区域
 #define ZONE_RESERVED 2  // ards 不可用区域
@@ -281,7 +284,7 @@ static void _reset_kpage(bitmap_t* map, u32 vaddr, u32 count) {
 u32 alloc_kpage(u32 count) {
     assert(count > 0);
     u32 vaddr = _alloc_kpage(&kernel_map, count);
-    LOGK("Alloc kernel pages 0x%p count %d\n", vaddr, count);
+    LOGK_ALLOC_OPTS("Alloc kernel pages 0x%p count %d\n", vaddr, count);
     return vaddr;
 }
 
@@ -290,7 +293,7 @@ void free_kpage(u32 vaddr, u32 count) {
     ASSERT_PAGE(vaddr);
     assert(count > 0);
     _reset_kpage(&kernel_map, vaddr, count);
-    LOGK("Free kernel pages 0x%p count %d\n", vaddr, count);
+    LOGK_ALLOC_OPTS("Free kernel pages 0x%p count %d\n", vaddr, count);
 }
 
 // 获取一页用户内存（phy 16M+），返回物理地址
@@ -301,7 +304,7 @@ static u32 get_user_page() {
             free_pages--;
             assert(free_pages >= 0);
             u32 paddr = PAGE(i);
-            LOGK("Get free page 0x%p\n", paddr);
+            LOGK_ALLOC_OPTS("Get free page 0x%p\n", paddr);
             return paddr;
         }
     }
@@ -327,7 +330,7 @@ static void put_user_page(u32 paddr) {
     // 确保空闲页数量在正确范围内
     assert(free_pages > 0 && free_pages < total_pages);
 
-    LOGK("Put user page paddr 0x%p\n", paddr);
+    LOGK_ALLOC_OPTS("Put user page paddr 0x%p\n", paddr);
 }
 /****************************************************************************************************************
  * 页表操作
@@ -425,6 +428,8 @@ void free_pte(task_t* target_task) {
     u32 pte_paddr;
     pde_entry = get_pde();
 
+    LOGK_PT_OPTS("Free all PTEs in user space\n");
+
     size_t i = 0;
     // 用户页表释放（phy > 16M）
     for (; i < PDE_IDX(KERNEL_VADDR_OFFSET); ++i, pde_entry++) {  // 0-0x300
@@ -439,9 +444,9 @@ void free_pte(task_t* target_task) {
                 continue;
             // 释放用户内存
             put_user_page(PAGE(pte_entry->index));
-            // pte 不需要置 0，仅 pde 置位就足够换新 pte 了
-            // 此外置 0 会导致 kunmap assert 失败
-            // pte_entry->present = false;
+            pte_entry->present = false;
+            // 理论上即将被释放或 set_cr3，因此可以不刷新 tlb
+            // flush_tlb(PAGE(pte_entry->index));
         }
         kunmap((u32)pte_base);
         // 释放 PT 所在页
@@ -532,12 +537,12 @@ u32 kmap(u32 paddr) {
     entry_init(&kmap_pte[i], IDX(paddr));
     flush_tlb(vaddr);
 
-    LOGK("kmap paddr 0x%x at vaddr 0x%x\n", paddr, vaddr);
+    LOGK_KMAP("kmap paddr 0x%x at vaddr 0x%x\n", paddr, vaddr);
     return vaddr;
 }
 
 u32 kunmap(u32 vaddr) {
-    LOGK("kunmap vaddr 0x%x\n", vaddr);
+    LOGK_KMAP("kunmap vaddr 0x%x\n", vaddr);
     // 保证是kmap分配的虚拟地址范围
     assert(vaddr >= kmap_start_vaddr &&
            vaddr < kmap_start_vaddr + KMAP_POOL_LEN * PAGE_SIZE);
@@ -545,9 +550,9 @@ u32 kunmap(u32 vaddr) {
 
     u32 idx = KMAP_GET_INDEX(vaddr);
 
-    if (!kmap_pool[idx].present) {
-        panic("???");
-    }
+    // free_pte 过程会置零 present，因此不能这样判断
+    // assert(kmap_pool[idx].present)
+
     kmap_pool[idx].present = 0;
     kmap_pool[idx].cnt--;
     if (kmap_pool[idx].cnt == 0) {
@@ -569,7 +574,7 @@ page_entry_t* get_pte(u32 vaddr) {
         entry_init(entry, IDX(paddr_page));  // pde[idx]=paddr_page
         kvaddr = kmap(paddr_page);           // 注意调用方清理kmap
         memset((void*)kvaddr, 0, PAGE_SIZE);
-        LOGK("Create new page table for 0x%x at pde[0x%x]\n", vaddr, idx);
+        LOGK_PT_OPTS("Create new page table for 0x%x at pde[0x%x]\n", vaddr, idx);
     } else {
         paddr_page = PAGE(entry->index);
         kvaddr = kmap(paddr_page);  // 注意调用方清理kmap
@@ -581,6 +586,7 @@ page_entry_t* get_pte(u32 vaddr) {
 }
 
 void link_user_page(u32 vaddr) {
+    LOGK_PT_OPTS("Linking user page for vaddr 0x%x\n", vaddr);
     // 找到该虚拟地址的页表pte
     task_t* task = get_current();
     page_entry_t* entry;
@@ -591,7 +597,8 @@ void link_user_page(u32 vaddr) {
 
     // 已经映射，无需操作
     if (entry->present) {
-        return;
+        LOGK_PT_OPTS("entry->present == true, skip linking\n");
+        goto clean;
     }
 
     // 为进程页表增加新的物理页
@@ -599,8 +606,8 @@ void link_user_page(u32 vaddr) {
     entry_init(entry, IDX(paddr_page));
     flush_tlb(vaddr);
 
-    LOGK("Link new user page for 0x%x at 0x%x\n", vaddr, paddr_page);
-
+    LOGK_PT_OPTS("Link new user page for 0x%x at 0x%x\n", vaddr, paddr_page);
+clean:
     kunmap(GET_PAGE(entry));  // 清理 get_pte 的 kmap
 }
 
@@ -615,7 +622,7 @@ void unlink_user_page(u32 vaddr) {
     entry = get_pte(vaddr);
 
     if (!entry->present) {
-        return;
+        goto clean;
     }
 
     entry->present = 0;
@@ -623,10 +630,11 @@ void unlink_user_page(u32 vaddr) {
 
     put_user_page(PAGE(entry->index));
 
-    kunmap(GET_PAGE(entry));  // 清理get_pte的kmap
-
-    LOGK("Unlink user page for 0x%x at paddr 0x%x\n", vaddr,
+    LOGK_PT_OPTS("Unlink user page for 0x%x at paddr 0x%x\n", vaddr,
          PAGE(entry->index));
+
+clean:
+    kunmap(GET_PAGE(entry));  // 清理 get_pte 的 kmap
 }
 
 typedef struct page_error_code_t {
@@ -719,20 +727,28 @@ void page_fault(int vector,
         }
 
         kunmap(GET_PAGE(pte_entry));  // 清理 get_pte 的 kmap
+        return;
 
         // 处理权限问题，或杀死进程等操作
-        // printk("PF error: Access deined\n");
+        // DEBUGK("PF error: Access deined at 0x%x\n", faulting_address);
     } else {
-        if (esp3 <= USER_STACK_BOTTOM) {  // 用户爆栈
-            // todo SIGSEGV 终止进程
-            panic("user stack overflow at esp: 0x%x!\n", esp3);
-        } else if (faulting_address > USER_STACK_BOTTOM) {
-            // pass
-        } else if (faulting_address > task->brk) {  // 用户访问未映射高地址
-            panic("user access unmapped memory at 0x%x!\n", faulting_address);
-        } else {
-            // pass
+        // 当前页表不存在该页，自动 link 用户栈，其余地址驳回
+
+        // esp3 的判定好像有点问题，execve 的 free_pte 后的 pf 会传入一个很小的 esp3
+        // if (esp3 <= USER_STACK_BOTTOM) {  // 用户爆栈
+        //     // todo SIGSEGV 终止进程
+        //     // sys_exit(-1);
+        //     panic(
+        //         "user stack overflow at esp: 0x%x!\n (should be 0x%x ~ 0x%x)\n",
+        //         esp3, USER_STACK_BOTTOM + 1, USER_STACK_TOP);
+        // }
+        
+        if (faulting_address > USER_STACK_BOTTOM &&
+            faulting_address <= USER_STACK_TOP) {
+            goto can_link;
         }
+        panic("user access unmapped memory at 0x%x!\n", faulting_address);
+    can_link:
         link_user_page(faulting_address);
     }
 

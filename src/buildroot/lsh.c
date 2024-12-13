@@ -32,6 +32,12 @@ extern char* strsep(const char* str);
 extern char* strrsep(const char* str);
 extern int printf(const char* fmt, ...);
 
+static char* envp[]= {
+    "HOME=/",
+    "PATH=/bin",
+    NULL,
+};
+
 void print_prompt() {
     getcwd(cwd, MAX_PATH_LEN);
     char* ptr = strrsep(cwd);
@@ -339,10 +345,14 @@ static void builtin_exec(int argc, char* argv[]) {
     pid_t pid = fork();
     if (pid) {
         pid_t child = waitpid(pid, &status, 0);
-        printf("wait pid %d status %d at time %d \n", child, status, time());
+        if (status != 0){
+            printf("exec error\n");
+        }else{
+            printf("wait pid %d status %d at time %d \n", child, status, time());
+        }
     } else {
         // execve 执行成功不会返回，失败才会返回，手动退出。
-        int i = execve(argv[1], NULL, NULL);
+        int i = execve(argv[1], NULL, envp);
         exit(i);
     }
 }

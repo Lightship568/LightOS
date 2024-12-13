@@ -3446,5 +3446,13 @@ QEMU+= -chardev udp,id=com2,port=6666,ipv4=on
   }
   ```
 
-  
+## 参数与环境变量
+
+sys_execve 时操作系统会将 argv 与 envp 拷贝到用户栈顶，从而对接运行参数给 main。
+
+理论上 main 应该接受三个参数，但定义 `int main(void);` 也是可以的，这样栈上参数就不会被索引到。
+
+内存布局，注意更新加载地址后的栈顶是 3G-1 （0xBFFFFFFF）不是 128M（0x10000000）
+
+![image-20241212152108593](markdown_img\image-20241212152108593.png)
 

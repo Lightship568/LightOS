@@ -1,3 +1,4 @@
+#include <lib/arena.h>
 #include <lib/bitmap.h>
 #include <lib/debug.h>
 #include <lib/elf.h>
@@ -6,7 +7,6 @@
 #include <lightos/fs.h>
 #include <lightos/memory.h>
 #include <lightos/task.h>
-#include <lib/arena.h>
 #include <sys/assert.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
@@ -83,6 +83,7 @@ static void load_segment(inode_t* inode, Elf32_Phdr* phdr) {
 }
 
 static u32 load_elf(inode_t* inode) {
+    LOGK("Loading elf...\n");
     link_user_page(USER_EXEC_ADDR);
 
     int n = 0;
@@ -109,11 +110,12 @@ static u32 load_elf(inode_t* inode) {
         ptr++;
     }
     return ehdr->e_entry;
+    LOGK("ELF loaded\n");
 }
 
-
 // 清理 fork 的残留，准备加载新 elf (filename 将被截断)
-void fork_clean(task_t* task, char* filepath){
+void fork_clean(task_t* task, char* filepath) {
+    LOGK("Cleaning fork resouce...\n");
     /**
      * 释放掉原本程序的空间布局和资源
      * 与 sys_exit 相似，但是要新申请和清理部分资源
@@ -124,7 +126,9 @@ void fork_clean(task_t* task, char* filepath){
     // iroot 默认都是根目录不变
     // 修改 pwd
     char* ptr = strrsep(filepath);
-    *(++ptr) = '\0';
+    if (ptr){
+        *(++ptr) = '\0';
+    }
     sys_chdir(filepath);
 
     // 释放 fork 的二进制 inode
@@ -141,8 +145,119 @@ void fork_clean(task_t* task, char* filepath){
     // 最后释放所有user_page, PTs，否则 filepath 访存失败
     // 但不可释放内核部分，因此 pd 不释放
     free_pte(task);
-    // 但是需要刷新tlb，这里直接拷贝新页表后 set_cr3 可能高效一些
+    // 需要刷新tlb，这里直接拷贝新页表后 set_cr3 可能高效一些
     set_cr3(task->pde);
+    LOGK("Fork resouce cleaned\n");
+}
+
+// 计算参数数量
+static u32 count_argv(char* argv[]) {
+    if (!argv) {
+        return 0;
+    }
+    int i = 0;
+    while (argv[i]) {
+        i++;
+    }
+    return i;
+}
+
+static u32 set_env_and_clean_fork(task_t* task, char* filename, char* argv[], char* envp[]) {
+    int argc = count_argv(argv) + 1;  // argv[0] 需要补上程序路径
+    int envc = count_argv(envp);
+
+    /**
+     * argv envp 来自原来的 fork 后进程，很大概率就来自栈顶
+     * set env 的目标正是栈顶，需要重新 link 栈顶页
+     * 所以需要先拷贝一份到内核
+     */
+
+    // 分配内核内存，用于临时存储参数
+    // linux 默认 128K，这里 16 k
+    u32 pages = alloc_kpage(4);
+    u32 pages_end = pages + 4 * PAGE_SIZE;
+
+    // 内核临时栈顶地址
+    char* ktop = (char*)pages_end;
+    // 用户栈顶地址
+    char* utop = (char*)USER_STACK_TOP;
+
+    // 内核参数
+    char** argvk = (char**)alloc_kpage(1);
+    // 以 NULL 结尾
+    argvk[argc] = NULL;
+
+    // 内核环境变量
+    char** envpk = argvk + argc + 1;
+    // 以 NULL 结尾
+    envpk[envc] = NULL;
+
+    int len = 0;
+    // 拷贝 envp
+    for (int i = envc - 1; i >= 0; i--) {
+        // 计算长度
+        len = strlen(envp[i]) + 1;
+        // 得到拷贝地址
+        ktop -= len;
+        utop -= len;
+        // 拷贝字符串到内核
+        memcpy(ktop, envp[i], len);
+        // 数组中存储的是用户态栈地址
+        envpk[i] = utop;
+    }
+
+    // 拷贝 argv
+    for (int i = argc - 1; i > 0; i--) {
+        // 计算长度
+        len = strlen(argv[i - 1]) + 1;
+
+        // 得到拷贝地址
+        ktop -= len;
+        utop -= len;
+        // 拷贝字符串到内核
+        memcpy(ktop, argv[i - 1], len);
+        // 数组中存储的是用户态栈地址
+        argvk[i] = utop;
+    }
+
+    // 拷贝 argv[0]，程序路径
+    len = strlen(filename) + 1;
+    ktop -= len;
+    utop -= len;
+    memcpy(ktop, filename, len);
+    argvk[0] = utop;
+
+    // 将 envp 数组拷贝内核
+    ktop -= (envc + 1) * 4;
+    memcpy(ktop, envpk, (envc + 1) * 4);
+
+    // 将 argv 数组拷贝内核
+    ktop -= (argc + 1) * 4;
+    memcpy(ktop, argvk, (argc + 1) * 4);
+
+    // 为 argc 赋值
+    ktop -= 4;
+    *(int*)ktop = argc;
+
+    assert((u32)ktop > pages);
+    
+    // 清理 fork 后的残留资源
+    // 注意，从此开始用户态页全部释放
+    // 后面对栈的访问会自动 PF 补页
+    fork_clean(task, filename);
+
+    // 将参数和环境变量拷贝到用户栈
+    LOGK("Copying ARG & ENV to new user stack...\n");
+    len = (pages_end - (u32)ktop);
+    utop = (char*)(USER_STACK_TOP - len);
+    memcpy(utop, ktop, len);
+    LOGK("ARG & ENV copied\n");
+
+    // 释放内核内存
+    free_kpage((u32)argvk, 1);
+    free_kpage(pages, 4);
+
+    return (u32)utop;
 }
 
 int sys_execve(char* filename, char* argv[], char* envp[]) {
@@ -163,13 +278,8 @@ int sys_execve(char* filename, char* argv[], char* envp[]) {
     task_t* task = get_current();
     strncpy(task->name, filename, TASK_NAME_LEN);
 
-    // 清理 fork 后的残留资源
-    // 注意，从此开始用户态页全部释放，需提前将参数复制到内核
-    fork_clean(task, filename);
-
-
-
-    // todo 环境变量与参数
+    // 清空已经获取的资源和用户态页表，拷贝 arg & env 到新的用户栈
+    u32 utop = set_env_and_clean_fork(task, filename, argv, envp);
 
     u32 entry = load_elf(inode);
     if (entry == EOF) {
@@ -188,12 +298,10 @@ int sys_execve(char* filename, char* argv[], char* envp[]) {
     iframe->vector = 0x20;
     iframe->edi = 1;
     iframe->esi = 2;
-    iframe->ebp = USER_STACK_TOP - 1;
     iframe->esp_dummy = 4;
     iframe->ebx = 5;
-    iframe->edx = 6;
-    iframe->ecx = 7;
     iframe->eax = 8;
+    iframe->ecx = 7;
 
     iframe->gs = 0;
     iframe->ds = USER_DATA_SELECTOR;
@@ -205,10 +313,11 @@ int sys_execve(char* filename, char* argv[], char* envp[]) {
 
     iframe->error = LIGHTOS_MAGIC;
 
+    iframe->edx = 0; // todo 动态链接器地址
     iframe->eip = entry;
     iframe->eflags = (0 << 12 | 0b10 | 1 << 9);  // IOPL=0, 固定1, IF中断开启
-    iframe->esp = USER_STACK_TOP;
-    
+    iframe->esp = utop;
+    iframe->ebp = utop;
 
     asm volatile(
         "movl %0, %%esp\n"
