@@ -309,7 +309,7 @@ u32 sys_fork() {
     task->ipwd->count++;
     task->iroot->count++;
     // 本体二进制引用计数
-    if (task->iexec){
+    if (task->iexec) {
         task->iexec->count++;
     }
 
@@ -350,8 +350,8 @@ child_task:
 }
 
 u32 sys_exit(u32 status) {
-    // 需要释放的有：vmap, vmap->buf, PD, PTs, 以及 PTs 指向的所有 user_page，以及 mmap
-    // 无需释放：task_list[n],
+    // 需要释放的有：vmap, vmap->buf, PD, PTs, 以及 PTs 指向的所有
+    // user_page，以及 mmap 无需释放：task_list[n],
     // task_t与内核栈所在页。这是因为延迟回收策略，便于父进程 waitpid
     task_t* task = get_current();
     // 主动调用exit()的情况，应该确认程序没有阻塞
@@ -405,7 +405,7 @@ u32 sys_exit(u32 status) {
         // todo 若父进程是init，则清理僵尸进程
     }
 
-    DEBUGK("Process %d (0x%x) exit with status %d\n", task->pid, task,
+    DEBUGK("Process %s (pid %d) exit with status %d\n", task->name, task->pid,
            task->status);
     schedule();
 }

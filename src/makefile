@@ -79,6 +79,8 @@ $(BUILD)/lib/libc.o: 			\
 	$(BUILD)/lib/syscall.o		\
 	$(BUILD)/lib/printf.o		\
 	$(BUILD)/lib/assert.o		\
+	$(BUILD)/lib/time.o			\
+
 
 	ld -m elf_i386 -r $^ -o $@
 
@@ -110,6 +112,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/clock.o		\
 	$(BUILD)/kernel/rtc.o		\
 	$(BUILD)/kernel/time.o		\
+	$(BUILD)/lib/time.o			\
 	$(BUILD)/kernel/memory.o	\
 	$(BUILD)/lib/bitmap.o		\
 	$(BUILD)/lib/syscall.o		\

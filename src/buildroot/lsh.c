@@ -32,7 +32,7 @@ extern char* strsep(const char* str);
 extern char* strrsep(const char* str);
 extern int printf(const char* fmt, ...);
 
-static char* envp[]= {
+static char* envp[] = {
     "HOME=/",
     "PATH=/bin",
     NULL,
@@ -337,22 +337,24 @@ static void builtin_mkfs(int argc, char* argv[]) {
     }
 }
 
-static void builtin_exec(int argc, char* argv[]) {
-    if (argc < 2) {
+static void builtin_exec(char* filename, int argc, char* argv[]) {
+    if (argc < 0){
+        printf("args error\n");
         return;
     }
     int status;
     pid_t pid = fork();
     if (pid) {
         pid_t child = waitpid(pid, &status, 0);
-        if (status != 0){
-            printf("exec error\n");
-        }else{
-            printf("wait pid %d status %d at time %d \n", child, status, time());
+        if (status != 0) {
+            printf("exec error with status %d\n", status);
+        } else {
+            // printf("wait pid %d status %d at time %d \n", child, status,
+            //        time());
         }
     } else {
         // execve 执行成功不会返回，失败才会返回，手动退出。
-        int i = execve(argv[1], NULL, envp);
+        int i = execve(filename, argv, envp);
         exit(i);
     }
 }
@@ -369,12 +371,12 @@ static void execute(int argc, char* argv[]) {
         return builtin_clear();
     } else if (!strcmp(line, "exit")) {
         return builtin_exit(argc, argv);
-    } else if (!strcmp(line, "ls")) {
-        return builtin_ls(argc, argv);
+    // } else if (!strcmp(line, "ls")) {
+    //     return builtin_ls(argc, argv);
     } else if (!strcmp(line, "cd")) {
         return builtin_cd(argc, argv);
-    } else if (!strcmp(line, "cat")) {
-        return builtin_cat(argc, argv);
+    // } else if (!strcmp(line, "cat")) {
+    //     return builtin_cat(argc, argv);
     } else if (!strcmp(line, "mkdir")) {
         return builtin_mkdir(argc, argv);
     } else if (!strcmp(line, "rmdir")) {
@@ -390,9 +392,20 @@ static void execute(int argc, char* argv[]) {
     } else if (!strcmp(line, "mkfs")) {
         return builtin_mkfs(argc, argv);
     } else if (!strcmp(line, "exec")) {
-        return builtin_exec(argc, argv);
+        if (IS_SEPARATOR(argv[1][0])){
+            strcpy(buf, argv[1]);
+        }else{
+            sprintf(buf, "%s/%s", cwd, argv[1]);
+        }
+        return builtin_exec(buf, argc - 2, &argv[2]);
     }
-    printf("lsh: commnand not fount: %s\n", argv[0]);
+    stat_t statbuf;
+    sprintf(buf, "/bin/%s.out", argv[0]);
+    if (stat(buf, &statbuf) == EOF) {
+        printf("lsh: commnand not fount: %s\n", argv[0]);
+        return;
+    }
+    return builtin_exec(buf, argc - 1, &argv[1]);
 }
 
 int lsh_main(void) {

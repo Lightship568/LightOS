@@ -4,6 +4,7 @@
 /**
  * 用户态 stdio
  */
+#include <lib/vsprintf.h>
 
 int printf(const char *fmt, ...);
 

@@ -18,11 +18,18 @@ $(BUILD_ROOT_PATH)/%.out:	\
 
 	ld -m elf_i386 -static $^ -o $@
 
+BIN_APPS:= \
+	$(BUILD_ROOT_PATH)/env.out	\
+	$(BUILD_ROOT_PATH)/echo.out	\
+	$(BUILD_ROOT_PATH)/cat.out	\
+	$(BUILD_ROOT_PATH)/ls.out	\
+	
 
 .PHONY: buildroot
 buildroot: \
-	$(BUILD)/LightOS.img $(BUILD)/slave.img	\
-	$(BUILD_ROOT_PATH)/env.out		\
+	$(BUILD)/LightOS.img		\
+	$(BUILD)/slave.img			\
+	$(BIN_APPS)
 
 
 # 创建 mount 文件夹
@@ -45,8 +52,10 @@ buildroot: \
 	echo "hello LightOS, from root directory!" > $(MNT_PATH)/hello.txt
 
 # Here to operate!
-	cp $(BUILD_ROOT_PATH)/env.out $(MNT_PATH)/bin/env.out
-
+	for app in $(BIN_APPS); \
+	do \
+		cp $$app $(MNT_PATH)/bin; \
+	done
 
 # 卸载文件系统与设备
 	sudo umount $(MNT_PATH)
