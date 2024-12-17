@@ -135,5 +135,7 @@ void* mmap(void* addr,
            off_t offset);
 int munmap(void* addr, size_t length);
 int execve(char* filename, char*argv[],char* envp[]);
+fd_t dup(fd_t oldfd);
+fd_t dup2(fd_t oldfd, fd_t newfd);
 
 #endif

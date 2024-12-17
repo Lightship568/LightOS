@@ -67,7 +67,8 @@ cache_t* find_entry(inode_t** dir,
     assert(ISDIR((*dir)->desc->mode));
 
     // 针对 mount 下根目录访问 .. 的处理
-    if (match_name(name, "..", next) && (*dir)->nr == 1 && (*dir) != get_root_inode()){
+    if (match_name(name, "..", next) && (*dir)->nr == 1 &&
+        (*dir) != get_root_inode()) {
         super_block_t* sb = get_super((*dir)->dev);
         inode_t* tmpi = *dir;
         (*dir) = sb->imount;
@@ -94,10 +95,10 @@ cache_t* find_entry(inode_t** dir,
             pcache = bread((*dir)->dev, block);
             entry = (dentry_t*)pcache->data;
         }
-        if (entry->nr == 0){
+        if (entry->nr == 0) {
             continue;
         }
-        if (match_name(name, entry->name, next)) {
+        if (match_name(name, entry->name, next) && entry->nr) {
             *result = entry;
             return pcache;
         }
@@ -163,7 +164,7 @@ inode_t* named(char* pathname, char** next) {
     task_t* task = get_current();
     dev_t dev;
 
-    if (!pathname){
+    if (!pathname) {
         goto failure;
     }
 
@@ -171,9 +172,9 @@ inode_t* named(char* pathname, char** next) {
     // 绝对路径与相对路径判断
     if (IS_SEPARATOR(left[0])) {
         inode = task->iroot;
-        do{
+        do {
             left++;
-        } while(IS_SEPARATOR(left[0]));
+        } while (IS_SEPARATOR(left[0]));
     } else if (left[0]) {
         inode = task->ipwd;
     } else {
@@ -281,7 +282,7 @@ inode_t* inode_open(char* pathname, int flag, int mode) {
     // 找到该文件
     if (pcache) {
         inode = iget(dir->dev, entry->nr);
-        if (!permission(inode, flag & O_ACCMODE)){
+        if (!permission(inode, ACC_MODE(flag & O_ACCMODE))) {
             goto makeup;
         }
         // 目录可以只读 open
@@ -760,7 +761,7 @@ clean:
     return ret;
 }
 
-int32 sys_mknod(char*filename, int mode, int dev){
+int32 sys_mknod(char* filename, int mode, int dev) {
     char* next = NULL;
     inode_t* dir = NULL;
     cache_t* pcache = NULL;
@@ -768,21 +769,21 @@ int32 sys_mknod(char*filename, int mode, int dev){
     int ret = EOF;
 
     dir = named(filename, &next);
-    if (!dir){
+    if (!dir) {
         goto clean;
     }
-    if (!*next){
+    if (!*next) {
         goto clean;
     }
-    if (!permission(dir, P_WRITE)){
+    if (!permission(dir, P_WRITE)) {
         goto clean;
     }
 
-    char*name = next;
+    char* name = next;
     dentry_t* entry;
     pcache = find_entry(&dir, name, &next, &entry);
     // 目录项已经存在
-    if (pcache){    
+    if (pcache) {
         goto clean;
     }
 
@@ -792,8 +793,8 @@ int32 sys_mknod(char*filename, int mode, int dev){
 
     inode = new_inode(dir->dev, entry->nr);
     inode->desc->mode = mode;
-    
-    if (ISBLK(mode) || ISCHR(mode)){
+
+    if (ISBLK(mode) || ISCHR(mode)) {
         inode->desc->zone[0] = dev;
     }
     ret = 0;

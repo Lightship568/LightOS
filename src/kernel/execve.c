@@ -123,13 +123,7 @@ void fork_clean(task_t* task, char* filepath) {
 
     // todo 清空 vmap 和 mmap
 
-    // iroot 默认都是根目录不变
-    // 修改 pwd
-    char* ptr = strrsep(filepath);
-    if (ptr){
-        *(++ptr) = '\0';
-    }
-    sys_chdir(filepath);
+    // pwd 和 iroot 都不能变
 
     // 释放 fork 的二进制 inode
     iput(task->iexec);

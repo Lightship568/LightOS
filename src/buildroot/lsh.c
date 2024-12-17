@@ -337,26 +337,137 @@ static void builtin_mkfs(int argc, char* argv[]) {
     }
 }
 
-static void builtin_exec(char* filename, int argc, char* argv[]) {
-    if (argc < 0){
-        printf("args error\n");
-        return;
+static void dupfile(int argc, char** argv, fd_t* dupfd) {
+    for (size_t i = 0; i < 3; i++) {
+        dupfd[i] = EOF;
     }
+    int outappend = 0;
+    int errappend = 0;
+
+    char* infile = NULL;
+    char* outfile = NULL;
+    char* errfile = NULL;
+
+    for (size_t i = 0; i < argc; i++) {
+        if (!strcmp(argv[i], "<") && (i + 1) < argc) {
+            infile = argv[i + 1];
+            argv[i] = NULL;
+            i++;
+            continue;
+        }
+        // todo "<<"
+        if (!strcmp(argv[i], ">") && (i + 1) < argc) {
+            outfile = argv[i + 1];
+            argv[i] = NULL;
+            i++;
+            continue;
+        }
+        if (!strcmp(argv[i], ">>") && (i + 1) < argc) {
+            outfile = argv[i + 1];
+            argv[i] = NULL;
+            outappend = O_APPEND;
+            i++;
+            continue;
+        }
+        if (!strcmp(argv[i], "2>") && (i + 1) < argc) {
+            errfile = argv[i + 1];
+            argv[i] = NULL;
+            i++;
+            continue;
+        }
+        if (!strcmp(argv[i], "2>>") && (i + 1) < argc) {
+            errfile = argv[i + 1];
+            argv[i] = NULL;
+            errappend = O_APPEND;
+            i++;
+            continue;
+        }
+    }
+
+    if (infile != NULL) {
+        fd_t fd = open(infile, O_RDONLY | outappend | O_CREAT, 0755);
+        if (fd == EOF) {
+            printf("open infile %s failure\n", infile);
+            goto clean;
+        }
+        dupfd[0] = fd;
+    }
+    if (outfile != NULL) {
+        fd_t fd = open(outfile, O_WRONLY | outappend | O_CREAT, 0755);
+        if (fd == EOF) {
+            printf("open outfile %s failure\n", outfile);
+            goto clean;
+        }
+        dupfd[1] = fd;
+    }
+    if (errfile != NULL) {
+        fd_t fd = open(errfile, O_WRONLY | errappend | O_CREAT, 0755);
+        if (fd == EOF) {
+            printf("open errfile %s failure\n", outfile);
+            exit(EOF);
+        }
+        dupfd[2] = fd;
+    }
+    return;
+clean:
+    for (size_t i = 0; i < 3; i++) {
+        if (dupfd[i] != EOF)
+            close(dupfd[i]);
+    }
+}
+
+pid_t builtin_command(char* filename,
+                      char* argv[],
+                      fd_t infd,
+                      fd_t outfd,
+                      fd_t errfd) {
     int status;
+
     pid_t pid = fork();
     if (pid) {
-        pid_t child = waitpid(pid, &status, 0);
-        if (status != 0) {
-            printf("exec error with status %d\n", status);
-        } else {
-            // printf("wait pid %d status %d at time %d \n", child, status,
-            //        time());
+        // 父进程文件无用，直接关闭
+        if (infd != EOF) {
+            close(infd);
         }
-    } else {
-        // execve 执行成功不会返回，失败才会返回，手动退出。
-        int i = execve(filename, argv, envp);
-        exit(i);
+        if (outfd != EOF) {
+            close(outfd);
+        }
+        if (errfd != EOF) {
+            close(errfd);
+        }
+        return pid;
     }
+    if (infd != EOF) {
+        fd_t fd = dup2(infd, STDIN_FILENO);
+        close(infd);
+    }
+    if (outfd != EOF) {
+        fd_t fd = dup2(outfd, STDOUT_FILENO);
+        close(outfd);
+    }
+    if (errfd != EOF) {
+        fd_t fd = dup2(outfd, STDERR_FILENO);
+        close(errfd);
+    }
+    
+    int i = execve(filename, argv, envp);
+    exit(i);
+}
+
+static void builtin_exec(int argc, char* argv[]) {
+    stat_t statbuf;
+    sprintf(buf, "/bin/%s.out", argv[0]);
+    if (stat(buf, &statbuf) == EOF) {
+        printf("lsh: commnand not fount: %s\n", argv[0]);
+        return;
+    }
+
+    int status;
+    fd_t dupfd[3];
+    dupfile(argc, argv, dupfd);
+
+    pid_t pid = builtin_command(buf, &argv[1], dupfd[0], dupfd[1], dupfd[2]);
+    waitpid(pid, &status, 0);
 }
 
 static void execute(int argc, char* argv[]) {
@@ -371,12 +482,12 @@ static void execute(int argc, char* argv[]) {
         return builtin_clear();
     } else if (!strcmp(line, "exit")) {
         return builtin_exit(argc, argv);
-    // } else if (!strcmp(line, "ls")) {
-    //     return builtin_ls(argc, argv);
+        // } else if (!strcmp(line, "ls")) {
+        //     return builtin_ls(argc, argv);
     } else if (!strcmp(line, "cd")) {
         return builtin_cd(argc, argv);
-    // } else if (!strcmp(line, "cat")) {
-    //     return builtin_cat(argc, argv);
+        // } else if (!strcmp(line, "cat")) {
+        //     return builtin_cat(argc, argv);
     } else if (!strcmp(line, "mkdir")) {
         return builtin_mkdir(argc, argv);
     } else if (!strcmp(line, "rmdir")) {
@@ -391,21 +502,8 @@ static void execute(int argc, char* argv[]) {
         return builtin_umount(argc, argv);
     } else if (!strcmp(line, "mkfs")) {
         return builtin_mkfs(argc, argv);
-    } else if (!strcmp(line, "exec")) {
-        if (IS_SEPARATOR(argv[1][0])){
-            strcpy(buf, argv[1]);
-        }else{
-            sprintf(buf, "%s/%s", cwd, argv[1]);
-        }
-        return builtin_exec(buf, argc - 2, &argv[2]);
     }
-    stat_t statbuf;
-    sprintf(buf, "/bin/%s.out", argv[0]);
-    if (stat(buf, &statbuf) == EOF) {
-        printf("lsh: commnand not fount: %s\n", argv[0]);
-        return;
-    }
-    return builtin_exec(buf, argc - 1, &argv[1]);
+    return builtin_exec(argc, argv);
 }
 
 int lsh_main(void) {

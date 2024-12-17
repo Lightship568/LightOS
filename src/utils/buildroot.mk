@@ -19,10 +19,11 @@ $(BUILD_ROOT_PATH)/%.out:	\
 	ld -m elf_i386 -static $^ -o $@
 
 BIN_APPS:= \
-	$(BUILD_ROOT_PATH)/env.out	\
-	$(BUILD_ROOT_PATH)/echo.out	\
-	$(BUILD_ROOT_PATH)/cat.out	\
-	$(BUILD_ROOT_PATH)/ls.out	\
+	$(BUILD_ROOT_PATH)/env.out		\
+	$(BUILD_ROOT_PATH)/echo.out		\
+	$(BUILD_ROOT_PATH)/cat.out		\
+	$(BUILD_ROOT_PATH)/ls.out		\
+	$(BUILD_ROOT_PATH)/touch.out	\
 	
 
 .PHONY: buildroot

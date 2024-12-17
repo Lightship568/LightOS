@@ -40,6 +40,8 @@
 
 #define MAX_PATH_LEN 4096  // 最大路径长度
 
+#define ACC_MODE(x) ("\004\002\006\377"[(x)&O_ACCMODE])
+
 enum file_flag {
     O_RDONLY = 00,     // 只读方式
     O_WRONLY = 01,     // 只写方式
@@ -229,6 +231,10 @@ int32 sys_chdir(char* pathname);
 int32 sys_chroot(char* pathname);
 // syscall: readdir。本质上就是将目录 inode 作为一个文件打开和读取 dentry
 int32 sys_readdir(fd_t fd, void* dir, int count);
+// syscall: dup. dup oldfd to another fd, return new fd
+fd_t sys_dup(fd_t oldfd);
+// syscall: dup2. dup oldfd to newfd (if newfd is not NULL, will close it first), return newfd
+fd_t sys_dup2(fd_t oldfd, fd_t newfd);
 
 /****************************************************
  * 设备相关

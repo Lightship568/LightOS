@@ -60,9 +60,7 @@ fd_t sys_creat(char* filename, int mode) {
 }
 
 void sys_close(fd_t fd) {
-    if (fd < 3) {
-        return;
-    }
+    assert(fd >= 0);
     assert(fd < TASK_FILE_NR);
     task_t* task = get_current();
     file_t* file = task->files[fd];
@@ -330,6 +328,41 @@ clean:
 
 int32 sys_readdir(fd_t fd, void* dir, int count) {
     return sys_read(fd, (char*)dir, count);
+}
+
+
+static int dupfd(fd_t fd, fd_t arg){
+    task_t* task = get_current();
+    if (fd >= TASK_FILE_NR || !task->files[fd]){
+        return EOF;
+    }
+    // 找空 fd
+    for (; arg < TASK_FILE_NR; arg++){
+        if (!task->files[arg]){
+            break;
+        }
+    }
+    // 打开文件到达上限
+    if (arg >= TASK_FILE_NR){
+        return EOF;
+    }
+    // 拷贝指针，并增加原文件引用计数
+    task->files[arg] = task->files[fd];
+    task->files[fd]->count++;
+    return arg;
+}
+
+fd_t sys_dup(fd_t oldfd){
+    return dupfd(oldfd, 0);
+}
+
+fd_t sys_dup2(fd_t oldfd, fd_t newfd){
+    // 合法操作，但健壮的 shell 应该不会发生
+    if (oldfd == newfd){
+        return newfd;
+    }
+    sys_close(newfd);
+    return dupfd(oldfd, newfd);
 }
 
 void file_init(void) {
