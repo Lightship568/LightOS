@@ -359,6 +359,7 @@ static void dupfile(int argc, char** argv, fd_t* dupfd) {
         if (!strcmp(argv[i], ">") && (i + 1) < argc) {
             outfile = argv[i + 1];
             argv[i] = NULL;
+            outappend = O_TRUNC;
             i++;
             continue;
         }
@@ -385,7 +386,7 @@ static void dupfile(int argc, char** argv, fd_t* dupfd) {
     }
 
     if (infile != NULL) {
-        fd_t fd = open(infile, O_RDONLY | outappend | O_CREAT, 0755);
+        fd_t fd = open(infile, O_RDONLY | O_CREAT, 0755);
         if (fd == EOF) {
             printf("open infile %s failure\n", infile);
             goto clean;
@@ -401,7 +402,7 @@ static void dupfile(int argc, char** argv, fd_t* dupfd) {
         dupfd[1] = fd;
     }
     if (errfile != NULL) {
-        fd_t fd = open(errfile, O_WRONLY | errappend | O_CREAT, 0755);
+        fd_t fd = open(outfile, O_WRONLY | errappend | O_CREAT, 0755);
         if (fd == EOF) {
             printf("open errfile %s failure\n", outfile);
             exit(EOF);

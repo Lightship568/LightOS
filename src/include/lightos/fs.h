@@ -36,7 +36,8 @@
 
 #define TOTAL_BLOCKS \
     (DIRECT_BLOCKS + INDIRECT1_BLOCKS + INDIRECT2_BLOCKS)  // 全部块数量
-#define FILE_MAX_SIZE (TOTAL_BLOCKS * BLOCK_SIZE)  // 文件最大大小（256MB）
+// #define FILE_MAX_SIZE (TOTAL_BLOCKS * BLOCK_SIZE)  // 文件最大大小（256MB）
+#define FILE_MAX_SIZE (BLOCK_SIZE) // ulimit 文件最大大小（1KB）
 
 #define MAX_PATH_LEN 4096  // 最大路径长度
 
