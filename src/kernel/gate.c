@@ -54,7 +54,7 @@ static u32 sys_test(void) {
 
 extern time_t sys_time();  // clock.c
 extern mode_t sys_umask(mode_t mask); // system.c
-extern int sys_execve(char* filename, char*argv[],char* envp[]); // execve.c
+extern int32 sys_execve(char* filename, char*argv[],char* envp[]); // execve.c
 
 // 系统调用表初始化，把散落各处的sys_处理函数指针保存到表中
 void syscall_init(void) {
@@ -97,6 +97,7 @@ void syscall_init(void) {
     syscall_table[SYS_NR_EXECVE] = sys_execve;
     syscall_table[SYS_NR_DUP] = sys_dup;
     syscall_table[SYS_NR_DUP2] = sys_dup2;
+    syscall_table[SYS_NR_PIPE] = sys_pipe;
 
 
     DEBUGK("Syscall initialized\n");

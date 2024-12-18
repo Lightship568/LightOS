@@ -3,8 +3,8 @@
 
 #include <lib/list.h>
 #include <lightos/cache.h>
-#include <sys/types.h>
 #include <lightos/stat.h>
+#include <sys/types.h>
 
 // defined in cache.h
 // #define BLOCK_SIZE 1024  // 块大小
@@ -37,11 +37,11 @@
 #define TOTAL_BLOCKS \
     (DIRECT_BLOCKS + INDIRECT1_BLOCKS + INDIRECT2_BLOCKS)  // 全部块数量
 // #define FILE_MAX_SIZE (TOTAL_BLOCKS * BLOCK_SIZE)  // 文件最大大小（256MB）
-#define FILE_MAX_SIZE (BLOCK_SIZE) // ulimit 文件最大大小（1KB）
+#define FILE_MAX_SIZE (BLOCK_SIZE)  // ulimit 文件最大大小（1KB）
 
 #define MAX_PATH_LEN 4096  // 最大路径长度
 
-#define ACC_MODE(x) ("\004\002\006\377"[(x)&O_ACCMODE])
+#define ACC_MODE(x) ("\004\002\006\377"[(x) & O_ACCMODE])
 
 enum file_flag {
     O_RDONLY = 00,     // 只读方式
@@ -77,6 +77,9 @@ typedef struct inode_t {
     time_t ctime;        // 修改时间
     list_node_t node;    // 链表节点
     dev_t mount;         // 安装设备
+    task_t* rxwaiter;    // 读等待进程
+    task_t* txwaiter;    // 写等待进程
+    bool pipe;           // 管道标志
 } inode_t;
 
 typedef struct super_desc_t {
@@ -171,6 +174,10 @@ inode_t* iget(dev_t dev, idx_t nr);
 void iput(inode_t* inode);
 // iget 的简单封装，获取新的 inode 并填写基本配置
 inode_t* new_inode(dev_t dev, idx_t nr);
+// 创建管道 inode
+inode_t* get_pipe_inode(void);
+// 释放管道 inode
+void put_pipe_inode(inode_t* inode);
 
 // 判断文件名是否相等
 bool match_name(const char* name, const char* entry_name, char** next);
@@ -234,8 +241,13 @@ int32 sys_chroot(char* pathname);
 int32 sys_readdir(fd_t fd, void* dir, int count);
 // syscall: dup. dup oldfd to another fd, return new fd
 fd_t sys_dup(fd_t oldfd);
-// syscall: dup2. dup oldfd to newfd (if newfd is not NULL, will close it first), return newfd
+// syscall: dup2. dup oldfd to newfd (if newfd is not NULL, will close it
+// first), return newfd
 fd_t sys_dup2(fd_t oldfd, fd_t newfd);
+// 管道
+int pipe_read(inode_t* inode, char* buf, int count);
+int pipe_write(inode_t* inode, char* buf, int count);
+int32 sys_pipe(fd_t pipefd[2]);
 
 /****************************************************
  * 设备相关

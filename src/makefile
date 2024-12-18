@@ -140,6 +140,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/ramdisk.o	\
 	$(BUILD)/kernel/execve.o	\
 	$(BUILD)/kernel/serial.o	\
+	$(BUILD)/fs/pipe.o			\
 
 
 	$(shell mkdir -p $(dir $@))

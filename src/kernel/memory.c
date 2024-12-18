@@ -284,6 +284,7 @@ static void _reset_kpage(bitmap_t* map, u32 vaddr, u32 count) {
 u32 alloc_kpage(u32 count) {
     assert(count > 0);
     u32 vaddr = _alloc_kpage(&kernel_map, count);
+    // memset((void*)vaddr, 0, PAGE_SIZE * count);
     LOGK_ALLOC_OPTS("Alloc kernel pages 0x%p count %d\n", vaddr, count);
     return vaddr;
 }

@@ -87,8 +87,14 @@ int32 sys_read(fd_t fd, char* buf, u32 count) {
 
     inode_t* inode = file->inode;
     int ret = EOF;
+
+    // 管道文件判断
+    if (inode->pipe){
+        ret = pipe_read(inode, buf, count);
+        goto exit;
+    }
     // 字符设备、块设备、与正常文件判断
-    if (ISCHR(inode->desc->mode)) {
+    else if (ISCHR(inode->desc->mode)) {
         assert(inode->desc->zone[0]);
         ret = device_read(inode->desc->zone[0], buf, count, 0, 0);
         goto exit;
@@ -127,8 +133,13 @@ int32 sys_write(fd_t fd, char* buf, u32 count) {
 
     inode_t* inode = file->inode;
     int ret = EOF;
+    // 管道文件判断
+    if (inode->pipe){
+        ret = pipe_write(inode, buf, count);
+        goto exit;
+    }
     // 字符设备、块设备、与正常文件判断
-    if (ISCHR(inode->desc->mode)) {
+    else if (ISCHR(inode->desc->mode)) {
         assert(inode->desc->zone[0]);
         ret = device_write(inode->desc->zone[0], buf, count, 0, 0);
         goto exit;

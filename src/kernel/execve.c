@@ -254,7 +254,7 @@ static u32 set_env_and_clean_fork(task_t* task, char* filename, char* argv[], ch
     return (u32)utop;
 }
 
-int sys_execve(char* filename, char* argv[], char* envp[]) {
+int32 sys_execve(char* filename, char* argv[], char* envp[]) {
     inode_t* inode = namei(filename);
     int ret = EOF;
     if (!inode) {

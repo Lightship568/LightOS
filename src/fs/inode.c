@@ -3,6 +3,8 @@
 #include <lightos/fs.h>
 #include <lightos/stat.h>
 #include <sys/assert.h>
+#include <lib/arena.h>
+#include <lib/kfifo.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -125,6 +127,11 @@ void iput(inode_t* inode) {
         return;
     }
 
+    // 释放管道
+    if (inode->pipe){
+        return put_pipe_inode(inode);
+    }
+
     if (inode->cache->dirty) {
         bwrite(inode->cache);  // 强一致
     }
@@ -203,6 +210,38 @@ inode_t* new_inode(dev_t dev, idx_t nr) {
     inode->desc->nlinks = 1;
 
     return inode;
+}
+
+inode_t* get_pipe_inode(void){
+    inode_t* inode = get_free_inode();
+    // EOF 是无设备，此处为无效设备并被占用
+    inode->dev = -2;
+    // 描述符和 cache 都要手动分配
+    inode->desc = (inode_desc_t*)kmalloc(sizeof(kfifo_t));
+    inode->cache = (void*)alloc_kpage(1);
+    // 读写两个文件打开同一个 inode
+    inode->count = 2;
+    inode->pipe = true;
+    inode->rxwaiter = NULL;
+    inode->txwaiter = NULL;
+    kfifo_init((kfifo_t*)inode->desc, (char*)inode->cache, PAGE_SIZE);
+    return inode;
+}
+
+void put_pipe_inode(inode_t* inode){
+    if (!inode){
+        return;
+    }
+    assert(inode->pipe);
+
+    inode->count--;
+    if (inode->count){
+        return;
+    }
+    inode->pipe = false;
+    kfree(inode->desc);
+    free_kpage((u32)inode->cache, 1);
+    put_free_inode(inode);
 }
 
 void inode_init(void) {

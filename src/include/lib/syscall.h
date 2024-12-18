@@ -137,5 +137,6 @@ int munmap(void* addr, size_t length);
 int execve(char* filename, char*argv[],char* envp[]);
 fd_t dup(fd_t oldfd);
 fd_t dup2(fd_t oldfd, fd_t newfd);
+int pipe(fd_t pipefd[2]);
 
 #endif

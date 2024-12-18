@@ -50,8 +50,34 @@ void builtin_logo() {
 }
 
 void builtin_test(int argc, char* argv[]) {
-    printf("sys test\n");
-    test();
+    printf("lsh testing...\n");
+    int status = 0;
+    fd_t pipefd[2];
+
+    int result = pipe(pipefd);
+    char* message = "This is a pipe test message!";
+    int len_message = strlen(message);
+
+    pid_t pid = fork();
+    if (pid) {
+        char buf[128];
+        memset(buf, 0, sizeof(buf));
+        printf("[p-%d] getting message\n", getpid());
+        int len = read(pipefd[0], buf, len_message);
+        printf("[p-%d] get message: %s\n", getpid(), buf);
+        printf("message count %d\n", len);
+
+        pid_t child = waitpid(pid, &status, 0);
+        close(pipefd[1]);
+        close(pipefd[0]);
+    } else {
+        printf("[c-%d] put message: %s\n", getpid(), message);
+        write(pipefd[1], message, len_message);
+
+        close(pipefd[1]);
+        close(pipefd[0]);
+        exit(0);
+    }
 }
 
 void readline(char* buf, u32 count) {
@@ -450,7 +476,7 @@ pid_t builtin_command(char* filename,
         fd_t fd = dup2(outfd, STDERR_FILENO);
         close(errfd);
     }
-    
+
     int i = execve(filename, argv, envp);
     exit(i);
 }
