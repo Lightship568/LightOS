@@ -3513,3 +3513,38 @@ pipe 系统调用本质上是返回两个文件 fd，fd[0] 负责读取，fd[1] 
 
 管道序列的实现主要是 shell 做的，还需要写能接受参数的程序，有点懒了，跳过了。
 
+# 内核内存保护
+
+在 linux 0.11 中，使用了**平坦模型**，即 GDT 默认映射全部内存空间，这样可以方便内核进行管理，但是同样也意味着分段机制全部失效。
+
+现代操作系统（不管是 32 位还是 64 位）普遍都用**平坦模型**，这是因为分页保护已经足够了，如果再引入分段保护，则会增加复杂度。因此，**现代操作系统基本都是“平坦分段 + 分页保护”**的做法。
+
+而内存的特权级权限则是由页表的 user 位控制的：
+
+```c
+typedef struct page_entry_t {
+    u8 present : 1;  // 在内存中
+    u8 write : 1;    // 0 只读 1 可读可写
+    u8 user : 1;     // 1 所有人 0 超级用户 DPL < 3
+    u8 pwt : 1;      // page write through 1 直写模式，0 回写模式
+    u8 pcd : 1;      // page cache disable 禁止该页缓冲
+    u8 accessed : 1; // 被访问过，用于统计使用频率
+    u8 dirty : 1;    // 脏页，表示该页缓冲被写过
+    u8 pat : 1;      // page attribute table 页大小 4K/4M
+    u8 global : 1;   // 全局，所有进程都用到了，该页不刷新缓冲
+    u8 shared : 1;   // 共享内存页，与 CPU 无关
+    u8 privat : 1;   // 私有内存页，与 CPU 无关
+    u8 readonly : 1; // 只读内存页，与 CPU 无关
+    u32 index : 20;  // 页索引
+} _packed page_entry_t;
+```
+
+我希望默认的 entry_init 设置 user = 0，安全性高点，所以相对的就需要在用户页表操作时手动增加 entry->user = 1。涉及到的部分共有四个：
+
+* link_user_page 路径的 get_pte，创建一个新的 pde 项分支，设置该 pde 项。
+* link_user_page 路径，get_pte 返回后，设置该 pte 项。
+* sys_fork 路径下的 copy_pte，用户页表创建并拷贝时，设置每个 pte 项。（copy_pde 不需要，复制的都是设置好用户态的 pde）
+* page_fault 中断处理下的 CoW，修改 pte index 为新页时，使用了 entry_init，需要将 user 设回。
+
+
+

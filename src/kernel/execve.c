@@ -269,6 +269,8 @@ int32 sys_execve(char* filename, char* argv[], char* envp[]) {
         goto clean;
     }
 
+    DEBUGK("----> execve %s\n", filename);
+
     task_t* task = get_current();
     strncpy(task->name, filename, TASK_NAME_LEN);
 
@@ -285,6 +287,7 @@ int32 sys_execve(char* filename, char* argv[], char* envp[]) {
     // 设置 iexec
     task->iexec = inode;
 
+    // 注意可能存在的内核栈 iframe 指针覆盖问题，目前没发生
     // ROP
     intr_frame_t* iframe =
         (intr_frame_t*)((u32)task + PAGE_SIZE - sizeof(intr_frame_t));

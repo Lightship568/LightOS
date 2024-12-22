@@ -7,6 +7,7 @@
 #include <lightos/multiboot2.h>
 #include <sys/assert.h>
 #include <sys/types.h>
+#include <lib/print.h>
 
 // 关闭 memory 的内核注释
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
@@ -178,7 +179,7 @@ static void entry_init(page_entry_t* entry, u32 index) {
 
     entry->present = 1;
     entry->write = 1;
-    entry->user = 1;
+    entry->user = 0;
     entry->index = index;
 }
 
@@ -375,6 +376,8 @@ void copy_pte(task_t* target_task) {
         target_pte_paddr = get_user_page();
         // PDE需要更新到新PT
         entry_init(target_pde_entry, IDX(target_pte_paddr));
+        // 设置 pde 用户权限
+        target_pde_entry->user = 1;
         // >16M kmap 进内核
         current_pte = (page_entry_t*)kmap(PAGE(current_pde_entry->index));
         target_pte = (page_entry_t*)kmap(target_pte_paddr);
@@ -573,12 +576,14 @@ page_entry_t* get_pte(u32 vaddr) {
     if (!entry->present) {
         paddr_page = get_user_page();
         entry_init(entry, IDX(paddr_page));  // pde[idx]=paddr_page
+        // 为 pde 切换用户权限
+        entry->user = 1;
         kvaddr = kmap(paddr_page);           // 注意调用方清理kmap
         memset((void*)kvaddr, 0, PAGE_SIZE);
         LOGK_PT_OPTS("Create new page table for 0x%x at pde[0x%x]\n", vaddr, idx);
     } else {
         paddr_page = PAGE(entry->index);
-        kvaddr = kmap(paddr_page);  // 注意调用方清理kmap
+        kvaddr = kmap(paddr_page);  // 注`意调用方清理kmap
     }
 
     idx = PTE_IDX(vaddr);
@@ -605,6 +610,8 @@ void link_user_page(u32 vaddr) {
     // 为进程页表增加新的物理页
     paddr_page = get_user_page();
     entry_init(entry, IDX(paddr_page));
+    // 为 pte 切换用户权限
+    entry->user = 1;
     flush_tlb(vaddr);
 
     LOGK_PT_OPTS("Link new user page for 0x%x at 0x%x\n", vaddr, paddr_page);
@@ -680,9 +687,13 @@ void page_fault(int vector,
     task = get_current();
     // 一定是用户态才能进入 PF，如果是内核PF，理应panic
     assert(task->uid == USER_RING3);
-    assert(faulting_address <= USER_STACK_TOP);
+
+    if(faulting_address > USER_STACK_TOP){
+        goto segmentation_fault;
+    }
 
     page_error_code_t* code = (page_error_code_t*)&error;
+    
 
     if (code->present) {
         // 页存在但有访问权限问题（例如，写入只读页）
@@ -723,6 +734,7 @@ void page_fault(int vector,
             memcpy((void*)page_new_vaddr, (void*)page_old_vaddr,
                    PAGE_SIZE);  // 复制内存页
             entry_init(pte_entry, IDX(paddr_page));
+            pte_entry->user = 1;
             flush_tlb(faulting_address);
             LOGK("CoW: Copy on Write at 0x%x\n", faulting_address);
         }
@@ -743,17 +755,17 @@ void page_fault(int vector,
         //         "user stack overflow at esp: 0x%x!\n (should be 0x%x ~ 0x%x)\n",
         //         esp3, USER_STACK_BOTTOM + 1, USER_STACK_TOP);
         // }
-        
         if (faulting_address > USER_STACK_BOTTOM &&
             faulting_address <= USER_STACK_TOP) {
-            goto can_link;
+            link_user_page(faulting_address);
+            return;
         }
-        panic("user access unmapped memory at 0x%x!\n", faulting_address);
-    can_link:
-        link_user_page(faulting_address);
     }
 
-    return;
+segmentation_fault:
+    printk("user access unmapped memory at 0x%x!\n", faulting_address);
+    printk("segmentation fault\n");
+    sys_exit(-1);
 }
 
 /******************************************************************************************************************
