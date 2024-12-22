@@ -9,14 +9,13 @@
 #include <lightos/task.h>
 #include <sys/global.h>
 #include <sys/types.h>
+#include <sys/assert.h>
 
-void init_uthread(void);
+extern int32 sys_execve(char* filename, char*argv[],char* envp[]); // execve.c
 
 void move_to_user_mode(void) {
     // 将 init_kthread 进程通过 iret 返回到 Ring3 执行
 
-    intr_frame_t
-        __stack_clear;  // 添加一个局部变量使得下面的iframe指针不会被后续操作覆盖
     intr_frame_t* iframe =
         (intr_frame_t*)((u32)task_list[1] + PAGE_SIZE - sizeof(intr_frame_t));
     task_t* task = get_current();
@@ -37,11 +36,6 @@ void move_to_user_mode(void) {
     // 切换为独立页表（init自己拷贝自己），此时无用户态页，本质就是内核地址共享
     copy_pde(task);
     set_cr3(task->pde);
-
-    // 切换 uid 为用户进程
-    task->uid = USER_RING3;
-    // init是所有进程的父进程
-    task->ppid = task->pid;
 
     iframe->vector = 0x20;
     iframe->edi = 1;
@@ -64,40 +58,32 @@ void move_to_user_mode(void) {
     iframe->error = LIGHTOS_MAGIC;
 
     // 当前的 GDT 中 USER_CODE 是可以执行内核代码的
-    iframe->eip = (u32)init_uthread;
     iframe->eflags = (0 << 12 | 0b10 | 1 << 9);  // IOPL=0, 固定1, IF中断开启
     iframe->esp = USER_STACK_TOP;
 
-    asm volatile(
-        "movl %0, %%esp\n"
-        "jmp interrupt_exit\n" ::"m"(iframe));
-}
+    // 切换 uid 为用户进程
+    task->uid = USER_RING3;
+    // init是所有进程的父进程
+    task->ppid = task->pid;
 
-extern int printf(const char* fmt, ...);
-extern void lsh_main(void);
+    int err = sys_execve("/bin/init.out", NULL, NULL);
+    panic("execve '/bin/init.out' failed, kernel pannic\n");
 
-void init_uthread(void) {
-    while (true) {
-        u32 status;
-        pid_t pid = fork();
-        if (pid) {
-            pid_t child = waitpid(pid, &status, -1);
-            printf("[init uthread] wait pid %d status %d at time %d\n", child,
-                   status, time());
-        } else {
-            int err = execve("/bin/lsh.out", NULL, NULL);
-            printf("execve /bin/lsh.out error with return %d\n", err);
-            exit(err); // OS 将进入 IDLE 死循环
-        }
-    }
+    // iframe->eip = (u32)init_uthread;
+    // asm volatile(
+    //     "movl %0, %%esp\n"
+    //     "jmp interrupt_exit\n" ::"m"(iframe));
 }
 
 void init_kthread(void) {
 
-    DEBUGK("kernel address is 0x%p\n", &&high_check);
+    DEBUGK("kernel vaddress is 0x%p\n", &&high_check);
 high_check:
 
     DEBUGK("init kthread move to user mode\n");
+
+    // 添加一个局部变量使得iframe指针不会被后续操作覆盖
+    intr_frame_t __stack_clear;  
 
     move_to_user_mode();
 }
