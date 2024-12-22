@@ -85,7 +85,9 @@ void init_uthread(void) {
             printf("[init uthread] wait pid %d status %d at time %d\n", child,
                    status, time());
         } else {
-            lsh_main();
+            int err = execve("/bin/lsh.out", NULL, NULL);
+            printf("execve /bin/lsh.out error with return %d\n", err);
+            exit(err); // OS 将进入 IDLE 死循环
         }
     }
 }

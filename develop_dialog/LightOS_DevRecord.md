@@ -3508,3 +3508,8 @@ sys_execve 时操作系统会将 argv 与 envp 拷贝到用户栈顶，从而对
 pipe 系统调用本质上是返回两个文件 fd，fd[0] 负责读取，fd[1] 负责写入，如此便可以实现在 fork 后，一个进程写入，另一个进程读取的效果。
 
 其底层实现是 inode 指向的共享内存`inode->cache = alloc_kpage(1)`，专门为 inode 添加 pipe 标志、rx 和 tx 的阻塞 task 字段。将这个 pipe inode 的读写单独重定向到 pipe 的函数，并在 sys_pipe 创建管道时将该 inode 封装为文件，后续就可以正常读写和关闭了。
+
+## 管道序列
+
+管道序列的实现主要是 shell 做的，还需要写能接受参数的程序，有点懒了，跳过了。
+

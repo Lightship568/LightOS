@@ -3,7 +3,7 @@
 #include <lib/syscall.h>
 #include <lib/vsprintf.h>
 #include <lightos/fs.h>
-#include <lightos/time.h>
+#include <lightos/time.h> // 实现在lib/time.c，但是懒得改.h了
 
 #define MAX_CMD_LEN 256
 #define MAX_ARG_NR 16
@@ -47,37 +47,6 @@ void print_prompt() {
 void builtin_logo() {
     // clear();
     printf((char*)lightos_logo);
-}
-
-void builtin_test(int argc, char* argv[]) {
-    printf("lsh testing...\n");
-    int status = 0;
-    fd_t pipefd[2];
-
-    int result = pipe(pipefd);
-    char* message = "This is a pipe test message!";
-    int len_message = strlen(message);
-
-    pid_t pid = fork();
-    if (pid) {
-        char buf[128];
-        memset(buf, 0, sizeof(buf));
-        printf("[p-%d] getting message\n", getpid());
-        int len = read(pipefd[0], buf, len_message);
-        printf("[p-%d] get message: %s\n", getpid(), buf);
-        printf("message count %d\n", len);
-
-        pid_t child = waitpid(pid, &status, 0);
-        close(pipefd[1]);
-        close(pipefd[0]);
-    } else {
-        printf("[c-%d] put message: %s\n", getpid(), message);
-        write(pipefd[1], message, len_message);
-
-        close(pipefd[1]);
-        close(pipefd[0]);
-        exit(0);
-    }
 }
 
 void readline(char* buf, u32 count) {
@@ -203,70 +172,6 @@ void strftime(time_t time, char* buf) {
             tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
 }
 
-static void builtin_ls(int argc, char* argv[]) {
-    bool is_list = false;
-    bool is_pwd = true;
-    for (int i = 1; i < argc; ++i) {
-        if (!strcmp(argv[i], "-l")) {
-            is_list = true;
-        } else {
-            is_pwd = false;
-        }
-    }
-    if (is_pwd) {
-        argc++;
-        argv[argc - 1] = cwd;
-    }
-    for (int i = 1; i < argc; ++i) {
-        if (argv[i][0] == '-') {
-            continue;
-        }
-        fd_t fd = open(argv[i], O_RDONLY, 0);
-        int len = readdir(fd, buf, BUFLEN);
-        close(fd);
-        if (len < 0) {
-            printf("ls: error reading dir\n");
-            continue;
-        }
-        bool is_first_print = true;
-        for (int j = 0; j < (len / sizeof(dirent_t)); ++j) {
-            dirent_t* dir = &((dirent_t*)buf)[j];
-            if (!strcmp(dir->name, ".") || !strcmp(dir->name, "..")) {
-                continue;
-            }
-            if (dir->nr == 0) {
-                continue;
-            }
-            if (!is_list) {
-                if (is_first_print) {
-                    printf("%s", dir->name);
-                    is_first_print = false;
-                } else {
-                    printf(" %s", dir->name);
-                }
-                continue;
-            }
-
-            stat_t statbuf;
-            char pathstr[MAX_CMD_LEN + NAME_LEN];
-            sprintf(pathstr, "%s/%s", argv[i], dir->name);
-            if (stat(pathstr, &statbuf) < 0) {
-                printf("ls: error checking stat of %s\n", dir->name);
-                continue;
-            }
-            parsemode(statbuf.mode, buf);
-
-            printf("%s ", buf);
-            strftime(statbuf.mtime, buf);
-            printf("% 2d %4d %4d %4d %s %s\n", statbuf.nlinks, statbuf.uid,
-                   statbuf.gid, statbuf.size, buf, dir->name);
-        }
-        if (!is_list) {
-            printf("\n");
-        }
-    }
-}
-
 static void builtin_cd(int argc, char* argv[]) {
     if (argc > 1) {
         if (chdir(argv[1]) < 0) {
@@ -274,27 +179,7 @@ static void builtin_cd(int argc, char* argv[]) {
         };
     }
 }
-static void builtin_cat(int argc, char* argv[]) {
-    if (argc < 2) {
-        printf("cat: no input file\n");
-        return;
-    }
-    for (int i = 1; i < argc; ++i) {
-        fd_t fd = open(argv[i], O_RDONLY, 0);
-        if (fd < 0) {
-            printf("cat: no such file %s\n", argv[i]);
-            continue;
-        }
-        while (true) {
-            int len = read(fd, buf, 1);
-            if (len == EOF) {
-                break;
-            }
-            write(STDOUT_FILENO, buf, len);
-        }
-        close(fd);
-    }
-}
+
 static void builtin_mkdir(int argc, char* argv[]) {
     if (argc < 2) {
         printf("mkdir: no input dir\n");
@@ -306,6 +191,7 @@ static void builtin_mkdir(int argc, char* argv[]) {
         }
     }
 }
+
 static void builtin_rmdir(int argc, char* argv[]) {
     if (argc < 2) {
         printf("rmdir: no input dir\n");
@@ -319,6 +205,7 @@ static void builtin_rmdir(int argc, char* argv[]) {
         }
     }
 }
+
 static void builtin_rm(int argc, char* argv[]) {
     if (argc < 2) {
         printf("rm: no input dir\n");
@@ -499,9 +386,7 @@ static void builtin_exec(int argc, char* argv[]) {
 
 static void execute(int argc, char* argv[]) {
     char* line = argv[0];
-    if (!strcmp(line, "test")) {
-        return builtin_test(argc, argv);
-    } else if (!strcmp(line, "logo")) {
+    if (!strcmp(line, "logo")) {
         return builtin_logo();
     } else if (!strcmp(line, "pwd")) {
         return builtin_pwd();
@@ -533,7 +418,7 @@ static void execute(int argc, char* argv[]) {
     return builtin_exec(argc, argv);
 }
 
-int lsh_main(void) {
+int main(void) {
     memset(cmd, 0, sizeof(cmd));
     memset(cwd, 0, sizeof(cwd));
 

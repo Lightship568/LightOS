@@ -134,7 +134,6 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/system.o 	\
 	$(BUILD)/fs/namei.o 		\
 	$(BUILD)/fs/file.o 			\
-	$(BUILD)/buildroot/lsh.o	\
 	$(BUILD)/fs/stat.o			\
 	$(BUILD)/fs/dev.o			\
 	$(BUILD)/kernel/ramdisk.o	\
