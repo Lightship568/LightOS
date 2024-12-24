@@ -7,7 +7,7 @@
 #include <sys/assert.h>
 
 extern int32 console_write(void* dev, char *buf, u32 count);
-static char buf[1024];
+static char buf[2048];
 int printk(const char* fmt, ...){
     int cnt;
     va_list args;

@@ -14,7 +14,7 @@ static char cmd[MAX_CMD_LEN];
 static char* argv[MAX_ARG_NR];
 static char buf[BUFLEN];
 
-static const char* lightos_logo =
+static const char* lightos_logo_ori =
     "\n\t"
     "\t /$$       /$$           /$$         /$$      /$$$$$$   /$$$$$$ \n"
     "\t| $$      |__/          | $$        | $$     /$$__  $$ /$$__  $$\n"
@@ -27,6 +27,32 @@ static const char* lightos_logo =
     "\t               /$$  \\ $$                                        \n"
     "\t              |  $$$$$$/                                        \n"
     "\t               \\______/                                         \n\0";
+
+
+// 定义 ANSI 颜色代码
+#define RED     "\033[31m"
+#define GREEN   "\033[32m"
+#define YELLOW  "\033[33m"
+#define BLUE    "\033[34m"
+#define MAGENTA "\033[35m"
+#define CYAN    "\033[36m"
+#define WHITE   "\033[37m"
+#define RESET   "\033[0m"
+
+static const char lightos_logo[] =
+    "\n"
+    "\t" RED "   /$$       /$$           /$$         /$$      /$$$$$$   /$$$$$$  " RESET "\n"
+    "\t" RED "  | $$      |__/          | $$        | $$     /$$__  $$ /$$__  $$ " RESET "\n"
+    "\t" GREEN "  | $$       /$$  /$$$$$$ | $$$$$$$  /$$$$$$  | $$  \\ $$| $$  \\__/ " RESET "\n"
+    "\t" YELLOW "  | $$      | $$ /$$__  $$| $$__  $$|_  $$_/  | $$  | $$|  $$$$$$  " RESET "\n"
+    "\t" BLUE "  | $$      | $$| $$  \\ $$| $$  \\ $$  | $$    | $$  | $$ \\____  $$ " RESET "\n"
+    "\t" MAGENTA "  | $$      | $$| $$  | $$| $$  | $$  | $$ /$$| $$  | $$ /$$  \\ $$ " RESET "\n"
+    "\t" CYAN "  | $$$$$$$$| $$|  $$$$$$$| $$  | $$  |  $$$$/|  $$$$$$/|  $$$$$$/ " RESET "\n"
+    "\t" WHITE "  |________/|__/ \\____  $$|__/  |__/   \\___/   \\______/  \\______/  " RESET "\n"
+    "\t" WHITE "                 /$$  \\ $$                                        " RESET "\n"
+    "\t" WHITE "                |  $$$$$$/                                        " RESET "\n"
+    "\t" WHITE "                 \\______/                                         " RESET "\n"
+    "\0";
 
 extern char* strsep(const char* str);
 extern char* strrsep(const char* str);
