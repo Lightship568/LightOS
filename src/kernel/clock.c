@@ -1,16 +1,16 @@
 /**
- * 时钟 
- * 100 HZ   
- * JIFFY 
-*/
+ * 时钟
+ * 100 HZ
+ * JIFFY
+ */
 
 #include <lib/debug.h>
 #include <lib/io.h>
+#include <lib/stdlib.h>
 #include <lightos/interrupt.h>
 #include <lightos/task.h>
+#include <lightos/timer.h>
 #include <sys/assert.h>
-#include <lib/io.h>
-#include <lib/stdlib.h>
 
 #define PIT_CHAN0_REG 0X40
 #define PIT_CHAN2_REG 0X42
@@ -21,23 +21,27 @@
 #define CLOCK_COUNTER (OSCILLATOR / HZ)
 #define JIFFY (1000 / HZ)
 
-#define SPEAKER_REG 0x61 //历史遗留问题，这个也是键盘端口
+#define SPEAKER_REG 0x61  // 历史遗留问题，这个也是键盘端口
 #define BEEP_HZ 440
 #define BEEP_COUNTER (OSCILLATOR / BEEP_HZ)
-#define BEEP_JIFFY 100
+#define BEEP_LAST_MS 100
 
 u32 volatile jiffies = 0;
 u32 jiffy = JIFFY;
-u32 volatile beeping = 0;
+bool volatile beeping = false;
+
+void stop_beep(timer_t* timer) {
+    if (beeping) {
+        beeping = false;
+        outb(SPEAKER_REG, inb(SPEAKER_REG) & 0xfc);
+    }
+}
 
 void start_beep(void) {
-    outb(SPEAKER_REG, inb(SPEAKER_REG) | 0b11);
-    beeping = jiffies + BEEP_JIFFY;
-}
-void stop_beep(void){
-    if (beeping && jiffies > beeping){
-        outb(SPEAKER_REG, inb(SPEAKER_REG) & 0xfc);
-        beeping = 0;
+    if (!beeping) {
+        beeping = true;
+        outb(SPEAKER_REG, inb(SPEAKER_REG) | 0b11);
+        timer_add(BEEP_LAST_MS, stop_beep, NULL);
     }
 }
 
@@ -47,10 +51,8 @@ void clock_handler(int vector) {
 
     jiffies++;
 
-    // timer_wakeup();
-    
-    // 唤醒睡眠进程
-    task_wakeup();
+    // 唤醒链表中超时的定时器
+    timer_wakeup();
 
     task_t* current = get_current();
     assert(current->magic == LIGHTOS_MAGIC);
@@ -59,14 +61,13 @@ void clock_handler(int vector) {
     current->ticks--;
 
     // 发送中断处理结束（允许下一次中断到来，否则切进程就没中断了）
-    send_eoi(vector); 
+    send_eoi(vector);
 
     if (current->ticks <= 0) {
         current->ticks = current->priority;
-        schedule(); // 程序再次被调度时将会从这里继续执行，后续是iret。且为关中断状态，中断不会重入
+        schedule();  // 程序再次被调度时将会从这里继续执行，后续是iret。且为关中断状态，中断不会重入
     }
 }
-
 
 extern u32 startup_time;
 

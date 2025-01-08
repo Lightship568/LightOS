@@ -140,6 +140,7 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/execve.o	\
 	$(BUILD)/kernel/serial.o	\
 	$(BUILD)/fs/pipe.o			\
+	$(BUILD)/kernel/timer.o		\
 
 
 	$(shell mkdir -p $(dir $@))

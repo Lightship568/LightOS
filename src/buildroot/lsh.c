@@ -67,7 +67,7 @@ static char* envp[] = {
 void print_prompt() {
     getcwd(cwd, MAX_PATH_LEN);
     char* ptr = strrsep(cwd);
-    printf("[root %s]# ", ptr[1] ? ptr + 1 : ptr);
+    printf(MAGENTA"[root %s]# "RESET, ptr[1] ? ptr + 1 : ptr);
 }
 
 void builtin_logo() {

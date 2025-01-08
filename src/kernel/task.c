@@ -13,6 +13,7 @@
 #include <sys/assert.h>
 #include <sys/global.h>
 #include <sys/types.h>
+#include <lightos/timer.h>
 
 extern void init_kthread(void);
 
@@ -21,7 +22,6 @@ task_t* current = (task_t*)NULL;
 extern u32 volatile jiffies;  // clock.c 时间片数
 extern u32 jiffy;             // clock.c 时钟中断的ms间隔
 
-static list_t sleep_list;     // 睡眠任务链表
 static list_t block_list;     // 阻塞任务链表
 static mutex_t mutex_test;    // 测试用的互斥量
 static rwlock_t rwlock_test;  // 测试用的读写锁
@@ -215,7 +215,6 @@ void task_setup(void) {
 }
 
 void task_init(void) {
-    list_init(&sleep_list);
     list_init(&block_list);
     mutex_init(&mutex_test);
     rwlock_init(&rwlock_test);
@@ -410,45 +409,26 @@ u32 sys_exit(u32 status) {
     schedule();
 }
 
+// 超时后被 timer 以 handler 形式调用
+void task_wakeup(timer_t* timer) {
+    assert(!get_interrupt_state());  // 确保是clock进入的关中断状态
+    task_t* task = timer->task;
+    task->ticks = task->priority;
+    task->state = TASK_READY;
+}
+
 void sys_sleep(u32 ms) {
     assert(!get_interrupt_state());  // 确保是系统调用进来关中断的状态
-    list_node_t* current_p = &current->node;
-    task_t* target_task;
-    list_node_t* anchor = &sleep_list.tail;
-
     // 没有被阻塞，才可被休眠
     assert(current->node.next == NULL && current->node.prev == NULL);
 
-    current->ticks = ms / jiffy;
-    current->jiffies = current->jiffies + current->ticks;
-
-    // 基于 jiffies 的插入排序
-    list_insert_sort(&sleep_list, current_p,
-                     element_node_offset(task_t, node, jiffies));
+    timer_add(ms, task_wakeup, NULL);
 
     current->state = TASK_SLEEPING;
     schedule();
 }
 
-// 非系统调用，但与sleep对应，被 clock.c 时钟中断调用
-void task_wakeup(void) {
-    assert(!get_interrupt_state());  // 确保是clock进入的关中断状态
-    task_t* target_task;
-    list_node_t* p = sleep_list.head.next;
-    list_node_t* tmp_p;
-    for (; p != &sleep_list.tail;) {
-        task_t* target_task = element_entry(task_t, node, p);
-        // 插入排序的，找目标jiffies <= 当前实际值的，证明要唤醒
-        if (target_task->jiffies > jiffies) {
-            break;
-        }
-        target_task->ticks = target_task->priority;
-        target_task->state = TASK_READY;
-        tmp_p = p->next;
-        list_remove(p);
-        p = tmp_p;
-    }
-}
+
 
 void task_block(task_t* task, list_t* waiting_list, task_state_t task_state) {
     if (waiting_list == NULL) {

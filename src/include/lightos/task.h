@@ -157,9 +157,6 @@ u32 sys_exit(u32 status);
 
 pid_t sys_waitpid(pid_t pid, int32* status, int32 options);
 
-// 非系统调用，但与sleep对应，被clock调用
-void task_wakeup(void);
-
 // 非系统调用，阻塞任务并加入对应阻塞链表
 // waiting_list 可以为 NULL，此时不关中断，只设置 task 本身并调度
 void task_block(task_t* task, list_t* waiting_list, task_state_t task_state);

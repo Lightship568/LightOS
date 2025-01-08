@@ -19,6 +19,7 @@
 #include <sys/assert.h>
 #include <sys/global.h>
 #include <sys/types.h>
+#include <lightos/timer.h>
 
 extern void clock_init(void);    // clock.c 无 .h
 extern void syscall_init(void);  // gate.c
@@ -35,6 +36,7 @@ void kernel_init(void) {
     time_init();
     clock_init();
     rtc_init();
+    timer_init();
 
     syscall_init();
 
