@@ -138,5 +138,9 @@ int execve(char* filename, char*argv[],char* envp[]);
 fd_t dup(fd_t oldfd);
 fd_t dup2(fd_t oldfd, fd_t newfd);
 int pipe(fd_t pipefd[2]);
+pid_t setsid(void);
+int setpgid(pid_t pid, pid_t pgid);
+int setpgrp(void);
+pid_t getpgrp(void);
 
 #endif

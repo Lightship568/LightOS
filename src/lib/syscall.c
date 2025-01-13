@@ -207,3 +207,19 @@ fd_t dup2(fd_t oldfd, fd_t newfd){
 int pipe(fd_t pipefd[2]){
     return _syscall1(SYS_NR_PIPE, (u32)pipefd);
 }
+
+pid_t setsid(void){
+    return _syscall0(SYS_NR_SETSID);
+}
+
+int setpgid(pid_t pid, pid_t pgid){
+    return _syscall2(SYS_NR_SETPGID, (u32)pid, (u32)pgid);
+}
+
+int setpgrp(void){
+    return setpgid(0,0);
+}
+
+pid_t getpgrp(void){
+     return _syscall0(SYS_NR_GETPGRP);
+}

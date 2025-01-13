@@ -406,6 +406,8 @@ static void builtin_exec(int argc, char* argv[]) {
     fd_t dupfd[3];
     dupfile(argc, argv, dupfd);
 
+    pid_t pgid = 0;
+
     pid_t pid = builtin_command(buf, &argv[1], dupfd[0], dupfd[1], dupfd[2]);
     waitpid(pid, &status, 0);
 }
@@ -445,6 +447,8 @@ static void execute(int argc, char* argv[]) {
 }
 
 int main(void) {
+    // setsid();
+
     memset(cmd, 0, sizeof(cmd));
     memset(cwd, 0, sizeof(cwd));
 

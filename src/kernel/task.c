@@ -10,14 +10,15 @@
 #include <lightos/interrupt.h>
 #include <lightos/memory.h>
 #include <lightos/task.h>
+#include <lightos/timer.h>
 #include <sys/assert.h>
+#include <sys/errno.h>
 #include <sys/global.h>
 #include <sys/types.h>
-#include <lightos/timer.h>
 
 extern void init_kthread(void);
 
-task_t* task_list[NR_TASKS] = {0};
+task_t* task_list[TASK_NR] = {0};
 task_t* current = (task_t*)NULL;
 extern u32 volatile jiffies;  // clock.c 时间片数
 extern u32 jiffy;             // clock.c 时钟中断的ms间隔
@@ -30,16 +31,16 @@ task_t* get_current() {
     return current;
 }
 
-// 分配一个内核页用于存放 pcb 与 内核栈，返回 pid，若达到 NR_TASKS 则返回 -1
+// 分配一个内核页用于存放 pcb 与 内核栈，返回 pid，若达到 TASK_NR 则返回 -1
 static pid_t get_free_task() {
-    for (int i = 0; i < NR_TASKS; ++i) {
+    for (int i = 0; i < TASK_NR; ++i) {
         if (task_list[i] == NULL) {
             task_list[i] = (task_t*)alloc_kpage(1);
             return i;
         }
     }
     panic("Task count reach top limit of %d, can't create a new task!\n",
-          NR_TASKS);
+          TASK_NR);
     return -1;
 }
 
@@ -56,8 +57,8 @@ void schedule(void) {
     // 获取 current 的 pid
     pid_t n = current->pid + 1;
     pid_t target = 0;
-    for (int i = 0; i < NR_TASKS; ++i, ++n) {
-        n %= NR_TASKS;
+    for (int i = 0; i < TASK_NR; ++i, ++n) {
+        n %= TASK_NR;
         if (n != 0 && task_list[n] && task_list[n]->ticks &&
             task_list[n]->state == TASK_READY) {
             target = n;
@@ -240,7 +241,7 @@ pid_t sys_waitpid(pid_t pid, int32* status, int32 options) {
     bool has_child;
     while (true) {
         has_child = false;
-        for (size_t i = 2; i < NR_TASKS; ++i) {
+        for (size_t i = 2; i < TASK_NR; ++i) {
             if (task_list[i] && task_list[i]->ppid == task->pid) {
                 has_child = true;
                 child = task_list[i];
@@ -380,6 +381,26 @@ u32 sys_exit(u32 status) {
     // 释放本体二进制inode
     iput(task->iexec);
 
+    // 释放所有 timer
+    timer_remove(task);
+
+    if (task_sess_leader(task)){
+        // todo: kill session
+        for (pid_t i = 0; i < TASK_NR; ++i){
+            task_t* tmptask = task_list[i];
+            if (!tmptask || tmptask->sid != task->sid || tmptask->pid == task->pid){
+                continue;
+            }
+            // 可能要考虑读盘的缓冲偏移？读写时会阻塞并调度
+            // 在这个状态下杀死阻塞的进程将导致终端处理唤醒了 ctrl->waiter
+            // 该指针指向已释放的进程，肯定是不行的
+            // 而如果不管的话，IDE 会存有垃圾数据等待读取，也是一个问题。
+            
+            // sys_exit(tmptask);
+            
+        }
+    }
+
     // 释放所有打开文件
     for (size_t i = 0; i < TASK_FILE_NR; ++i) {
         file_t* file = task->files[i];
@@ -388,7 +409,7 @@ u32 sys_exit(u32 status) {
         }
     }
 
-    for (size_t i = 0; i < NR_TASKS; ++i) {
+    for (size_t i = 0; i < TASK_NR; ++i) {
         if (!task_list[i])
             continue;
 
@@ -427,8 +448,6 @@ void sys_sleep(u32 ms) {
     current->state = TASK_SLEEPING;
     schedule();
 }
-
-
 
 void task_block(task_t* task, list_t* waiting_list, task_state_t task_state) {
     if (waiting_list == NULL) {
@@ -494,4 +513,59 @@ fd_t task_get_fd(task_t* task) {
 void task_put_fd(task_t* task, fd_t fd) {
     assert(fd < TASK_FILE_NR);
     task->files[fd] = NULL;
+}
+
+bool task_sess_leader(task_t* task) {
+    return task->sid == task->pid;
+}
+
+pid_t sys_setsid(void) {
+    task_t* task = get_current();
+    // 会话首领不可开启新会话
+    if (task_sess_leader(task)){
+        return -EPERM;
+    }
+    task->sid = task->pid;
+    task->pgid = task->pid;
+
+    return task->sid;
+}
+
+int sys_setpgid(pid_t pid, pid_t pgid) {
+    task_t* current_task = get_current();
+    task_t* task = NULL;
+    if (!pid) {
+        // pid == 0，修改当前程序
+        task = current_task;
+    }else{
+        // 找到目标 pid 的 pcb
+        for (int i = 0; i < TASK_NR; i++) {
+            if (!task_list[i] || task_list[i]->pid != pid) {
+                continue;
+            }
+            task = task_list[i];
+            break;
+        }
+    }
+    // pgid == 0，修改为当前程序组
+    if (!pgid) {
+        pgid = current_task->pid;
+    }
+    if (!task){
+        return -ESRCH;
+    }
+    // 会话首领不可修改进程组
+    if (task_sess_leader(task)) {
+        return -EPERM;
+    }
+    // 不可修改其他会话的进程
+    if (task->sid != current_task->sid) {
+        return -EPERM;
+    }
+    task->gid = pgid;
+    return EOK;
+}
+
+pid_t sys_getpgrp(void) {
+    return get_current()->pgid;
 }

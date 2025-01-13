@@ -10,7 +10,7 @@
 extern u32 volatile jiffies;  // clock.c 时间片数
 
 void switch_to(int n) {
-    assert(n >= 0 && n < NR_TASKS && task_list[n] != NULL);
+    assert(n >= 0 && n < TASK_NR && task_list[n] != NULL);
 
     if (current == task_list[n])
         return;
