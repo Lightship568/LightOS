@@ -15,6 +15,8 @@
 #include <sys/errno.h>
 #include <sys/global.h>
 #include <sys/types.h>
+#include <lightos/tty.h>
+#include <lightos/device.h>
 
 extern void init_kthread(void);
 
@@ -398,6 +400,12 @@ u32 sys_exit(u32 status) {
             
             // sys_exit(tmptask);
             
+        }
+        // 释放与该 session 绑定的 tty 设备
+        if (task->tty > 0){
+            device_t* device = device_get(task->tty);
+            tty_t* tty = (tty_t*)device->ptr;
+            tty->pgid = 0;
         }
     }
 

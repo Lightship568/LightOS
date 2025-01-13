@@ -20,6 +20,7 @@
 #include <sys/global.h>
 #include <sys/types.h>
 #include <lightos/timer.h>
+#include <lightos/tty.h>
 
 extern void clock_init(void);    // clock.c 无 .h
 extern void syscall_init(void);  // gate.c
@@ -37,6 +38,7 @@ void kernel_init(void) {
     clock_init();
     rtc_init();
     timer_init();
+    tty_init();
 
     syscall_init();
 

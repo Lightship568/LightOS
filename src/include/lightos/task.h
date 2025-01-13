@@ -83,6 +83,7 @@ typedef struct task_t {
     pid_t ppid;                          // 父任务ID
     pid_t pgid;                          // 进程组
     pid_t sid;                           // 进程会话
+    dev_t tty;                           // tty 设备
     u32 pde;                             // 页目录物理地址
     list_node_t node;                    // 链表
     struct bitmap_t* vmap;               // 进程虚拟内存位图
@@ -174,7 +175,8 @@ void task_put_fd(task_t* task, fd_t fd);
 
 // 返回该进程是否是 session leader
 bool task_sess_leader(task_t* task);
-// 创建一个新的会话，当前进程就是会话首领，且该会话没有控制终端，该进程将直接被 systemd 收养
+// 创建一个新的会话，当前进程就是会话首领，且该会话没有控制终端，该进程将直接被
+// systemd 收养
 pid_t sys_setsid(void);
 // 设置当前进程到目标进程组中，若 pgid 为 0，则创建新进程组，进程即会话首领
 int sys_setpgid(pid_t pid, pid_t pgid);

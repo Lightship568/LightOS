@@ -5,8 +5,6 @@
 #include <lightos/task.h>
 #include <sys/assert.h>
 
-#define DEVICE_NR 64  // 设备数量
-
 static device_t device_list[DEVICE_NR];
 
 // 获取新的空设备槽位
@@ -68,8 +66,8 @@ int device_write(dev_t dev, void* buf, size_t count, idx_t idx, int flags) {
     if (device->write) {
         return device->write(device->ptr, buf, count, idx, flags);
     }
+    DEBUGK("Device %s(dev %d) WRITE is not implemented\n", device->name, dev);
     assert(device->type != DEV_CONSOLE);  // 非 console
-    DEBUGK("Device %s(id %d) WRITE is not implemented\n", device->name, dev);
     return EOF;
 }
 

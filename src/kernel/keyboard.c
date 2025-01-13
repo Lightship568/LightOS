@@ -272,6 +272,8 @@ static void set_led() {
     if (!keyboard_ack()) return;
 }
 
+extern int tty_rx_notify(char* ch, bool ctrl, bool shift, bool alt);
+
 void keyboard_handler(int vector) {
     assert(vector == 0x21);
     send_eoi(vector);
@@ -344,6 +346,11 @@ void keyboard_handler(int vector) {
 
     if (ch == INV)
         return;
+
+    // 通知 tty 设备处理输入字符，成功即可返回
+    if (tty_rx_notify(&ch, ctrl_state, shift_state, alt_state) > 0){
+        return;
+    }
 
     if (fg_task != NULL){
         kfifo_put(&kb_fifo, ch);

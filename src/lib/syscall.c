@@ -223,3 +223,15 @@ int setpgrp(void){
 pid_t getpgrp(void){
      return _syscall0(SYS_NR_GETPGRP);
 }
+
+int stty(void){
+    return _syscall0(SYS_NR_STTY);
+}
+
+int gtty(void){
+    return _syscall0(SYS_NR_GTTY);
+}
+
+int ioctl(fd_t fd, int cmd, int args){
+    return _syscall3(SYS_NR_IOCTL, fd, cmd ,args);
+}

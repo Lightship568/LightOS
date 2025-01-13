@@ -55,6 +55,9 @@ static u32 sys_test(void) {
 extern time_t sys_time();  // clock.c
 extern mode_t sys_umask(mode_t mask); // system.c
 extern int32 sys_execve(char* filename, char*argv[],char* envp[]); // execve.c
+extern int sys_ioctl(fd_t fd, int cmd, void* args); // ioctl.c
+extern int sys_stty(void); // tty.c
+extern int sys_gtty(void); // tty.c
 
 // 系统调用表初始化，把散落各处的sys_处理函数指针保存到表中
 void syscall_init(void) {
@@ -101,6 +104,9 @@ void syscall_init(void) {
     syscall_table[SYS_NR_SETSID] = sys_setsid;
     syscall_table[SYS_NR_SETPGID] = sys_setpgid;
     syscall_table[SYS_NR_GETPGRP] = sys_getpgrp;
+    syscall_table[SYS_NR_IOCTL] = sys_ioctl;
+    syscall_table[SYS_NR_STTY] = sys_stty;
+    syscall_table[SYS_NR_GTTY] = sys_gtty;
 
 
     DEBUGK("Syscall initialized\n");

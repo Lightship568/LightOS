@@ -29,6 +29,9 @@ void dev_init(void) {
     device = device_find(DEV_KEYBOARD, 0);
     sys_mknod("/dev/keyboard", IFCHR | IRUSR, device->dev);
 
+    device = device_find(DEV_TTY, 0);
+    sys_mknod("/dev/tty", IFCHR | (IRUSR | IWUSR), device->dev);
+
     // 列出所有设备
     char name[NAMELEN];
     u32 subtype_list[] = {DEV_IDE_DISK, DEV_IDE_PART, DEV_RAMDISK, DEV_SERIAL};
@@ -55,9 +58,9 @@ void dev_init(void) {
     }
 
     // 初始化标准输入输出错误
-    sys_link("/dev/console", "/dev/stdout");
-    sys_link("/dev/console", "/dev/stderr");
-    sys_link("/dev/keyboard", "/dev/stdin");
+    sys_link("/dev/tty", "/dev/stdout");
+    sys_link("/dev/tty", "/dev/stderr");
+    sys_link("/dev/tty", "/dev/stdin");
 
     file_t* file;
     inode_t* inode;

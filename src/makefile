@@ -141,6 +141,9 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/serial.o	\
 	$(BUILD)/fs/pipe.o			\
 	$(BUILD)/kernel/timer.o		\
+	$(BUILD)/kernel/tty.o		\
+	$(BUILD)/fs/ioctl.o			\
+
 
 
 	$(shell mkdir -p $(dir $@))

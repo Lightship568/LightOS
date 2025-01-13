@@ -142,5 +142,8 @@ pid_t setsid(void);
 int setpgid(pid_t pid, pid_t pgid);
 int setpgrp(void);
 pid_t getpgrp(void);
+int stty(void);
+int gtty(void);
+int ioctl(fd_t fd, int cmd, int args);
 
 #endif
