@@ -70,7 +70,7 @@ $(BUILD)/fs/%.o: $(SRC)/fs/%.c
 
 
 # 将 lib 下用户态 .o 打包成 libc
-$(BUILD)/lib/libc.o: 			\
+$(BUILD)/lib/libc.o: \
 	$(BUILD)/lib/crt.o 			\
 	$(BUILD)/lib/crt1.o			\
 	$(BUILD)/lib/string.o		\
@@ -80,6 +80,7 @@ $(BUILD)/lib/libc.o: 			\
 	$(BUILD)/lib/printf.o		\
 	$(BUILD)/lib/assert.o		\
 	$(BUILD)/lib/time.o			\
+	$(BUILD)/lib/restorer.o		\
 
 
 	ld -m elf_i386 -r $^ -o $@
@@ -115,7 +116,6 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/lib/time.o			\
 	$(BUILD)/kernel/memory.o	\
 	$(BUILD)/lib/bitmap.o		\
-	$(BUILD)/lib/syscall.o		\
 	$(BUILD)/kernel/gate.o		\
 	$(BUILD)/lib/list.o			\
 	$(BUILD)/kernel/schedule.o	\
@@ -123,7 +123,6 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/keyboard.o	\
 	$(BUILD)/lib/kfifo.o		\
 	$(BUILD)/kernel/init.o		\
-	$(BUILD)/lib/printf.o		\
 	$(BUILD)/lib/arena.o		\
 	$(BUILD)/kernel/ide.o		\
 	$(BUILD)/kernel/device.o	\
@@ -143,6 +142,8 @@ $(BUILD)/kernel.bin: \
 	$(BUILD)/kernel/timer.o		\
 	$(BUILD)/kernel/tty.o		\
 	$(BUILD)/fs/ioctl.o			\
+	$(BUILD)/kernel/signal.o	\
+
 
 
 

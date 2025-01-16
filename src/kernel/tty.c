@@ -7,6 +7,27 @@
 
 static tty_t typewriter;
 
+extern int sys_kill(pid_t pid, int sig);  // kernel/signal.c
+
+// 向前台进程组发送中断信号
+int tty_intr(void) {
+    tty_t* tty = &typewriter;
+    if (!tty->pgid) {
+        return 0;
+    }
+    for (size_t i = 0; i < TASK_NR; i++) {
+        task_t* task = task_list[i];
+        if (!task) {
+            continue;
+        }
+        if (task->pgid != tty->pgid) {
+            continue;
+        }
+        sys_kill(task->pid, SIGINT);
+    }
+    return 0;
+}
+
 int tty_rx_notify(char* ch, bool ctrl, bool shift, bool alt) {
     switch (*ch) {
         case '\r':
@@ -24,7 +45,7 @@ int tty_rx_notify(char* ch, bool ctrl, bool shift, bool alt) {
         case 'c':
         case 'C':
             LOGK("CTRL + C Pressed\n");
-            // tty_intr();
+            tty_intr();
             *ch = '\n';
             return 0;
         case 'l':
@@ -58,11 +79,11 @@ int tty_ioctl(tty_t* tty, int cmd, void* args, int flags) {
     return -EINVAL;
 }
 
-int sys_stty(void) {
+int32 sys_stty(void) {
     return -ENOSYS;
 }
 
-int sys_gtty(void) {
+int32 sys_gtty(void) {
     return -ENOSYS;
 }
 

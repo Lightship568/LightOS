@@ -1,6 +1,5 @@
 #include <lib/syscall.h>
-// #include <sys/assert.h>
-// #include <lightos/task.h>
+#include <lib/signal.h>
 
 // ebx，ecx，edx，esi，edi
 // intel 不采用栈传递系统调用参数
@@ -43,11 +42,17 @@ static _inline u32 _syscall4(u32 nr, u32 arg1, u32 arg2, u32 arg3, u32 arg4) {
     return ret;
 }
 
-static _inline u32 _syscall5(u32 nr, u32 arg1, u32 arg2, u32 arg3, u32 arg4, u32 arg5) {
+static _inline u32 _syscall5(u32 nr,
+                             u32 arg1,
+                             u32 arg2,
+                             u32 arg3,
+                             u32 arg4,
+                             u32 arg5) {
     u32 ret;
     asm volatile("int $0x80\n"
                  : "=a"(ret)
-                 : "a"(nr), "b"(arg1), "c"(arg2), "d"(arg3), "S"(arg4), "D"(arg5)
+                 : "a"(nr), "b"(arg1), "c"(arg2), "d"(arg3), "S"(arg4),
+                   "D"(arg5)
                  : "memory");
     return ret;
 }
@@ -165,19 +170,24 @@ int mknod(char* filename, int mode, int dev) {
     return _syscall3(SYS_NR_MKNOD, (u32)filename, (u32)mode, (u32)dev);
 }
 
-int mount(char* devname, char* dirname, int flags){
+int mount(char* devname, char* dirname, int flags) {
     return _syscall3(SYS_NR_MOUNT, (u32)devname, (u32)dirname, (u32)flags);
 }
 
-int umount(char* target){
+int umount(char* target) {
     return _syscall1(SYS_NR_UMOUNT, (u32)target);
 }
 
-int mkfs(char* devname, int icount){
+int mkfs(char* devname, int icount) {
     return _syscall2(SYS_NR_MKFS, (u32)devname, (u32)icount);
 }
 
-void* mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset){
+void* mmap(void* addr,
+           size_t length,
+           int prot,
+           int flags,
+           int fd,
+           off_t offset) {
     mmap_args args;
     args.addr = addr;
     args.length = length;
@@ -188,50 +198,71 @@ void* mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
     return (void*)_syscall1(SYS_NR_MMAP, (u32)&args);
 }
 
-int munmap(void* addr, size_t length){
+int munmap(void* addr, size_t length) {
     return _syscall2(SYS_NR_MUNMAP, (u32)addr, (u32)length);
 }
 
-int execve(char* filename, char*argv[],char* envp[]){
+int execve(char* filename, char* argv[], char* envp[]) {
     return _syscall3(SYS_NR_EXECVE, (u32)filename, (u32)argv, (u32)envp);
 }
 
-fd_t dup(fd_t oldfd){
+fd_t dup(fd_t oldfd) {
     return _syscall1(SYS_NR_DUP, (u32)oldfd);
 }
 
-fd_t dup2(fd_t oldfd, fd_t newfd){
+fd_t dup2(fd_t oldfd, fd_t newfd) {
     return _syscall2(SYS_NR_DUP2, (u32)oldfd, (u32)newfd);
 }
 
-int pipe(fd_t pipefd[2]){
+int pipe(fd_t pipefd[2]) {
     return _syscall1(SYS_NR_PIPE, (u32)pipefd);
 }
 
-pid_t setsid(void){
+pid_t setsid(void) {
     return _syscall0(SYS_NR_SETSID);
 }
 
-int setpgid(pid_t pid, pid_t pgid){
+int setpgid(pid_t pid, pid_t pgid) {
     return _syscall2(SYS_NR_SETPGID, (u32)pid, (u32)pgid);
 }
 
-int setpgrp(void){
-    return setpgid(0,0);
+int setpgrp(void) {
+    return setpgid(0, 0);
 }
 
-pid_t getpgrp(void){
-     return _syscall0(SYS_NR_GETPGRP);
+pid_t getpgrp(void) {
+    return _syscall0(SYS_NR_GETPGRP);
 }
 
-int stty(void){
+int stty(void) {
     return _syscall0(SYS_NR_STTY);
 }
 
-int gtty(void){
+int gtty(void) {
     return _syscall0(SYS_NR_GTTY);
 }
 
-int ioctl(fd_t fd, int cmd, int args){
-    return _syscall3(SYS_NR_IOCTL, fd, cmd ,args);
+int ioctl(fd_t fd, int cmd, int args) {
+    return _syscall3(SYS_NR_IOCTL, (u32)fd, (u32)cmd, (u32)args);
+}
+
+int kill(pid_t pid, int signal) {
+    return _syscall2(SYS_NR_KILL, (u32)pid, (u32)signal);
+}
+
+int sgetmask(void){
+    return _syscall0(SYS_NR_SGETMASK);
+}
+
+int ssetmask(int newmask){
+    return _syscall1(SYS_NR_SSETMASK, (u32)newmask);
+}
+
+extern int restorer(void);
+int signal(int sig, int handler){
+    return _syscall3(SYS_NR_SIGNAL, (u32)sig, (u32)handler, (u32)restorer);
+}
+
+int sigaction(int sig, sigaction_t* action, sigaction_t* oldaction){
+    return _syscall3(SYS_NR_SIGACTION, (u32)sig, (u32)action, (u32)oldaction);
 }

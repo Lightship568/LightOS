@@ -8,6 +8,7 @@
 #include <lib/list.h>
 #include <sys/global.h>
 #include <sys/types.h>
+#include <lib/signal.h>
 
 #define TASK_NR 64
 
@@ -65,7 +66,7 @@ typedef enum task_state_t {
     TASK_READY,     // 就绪
     TASK_BLOCKED,   // 阻塞
     TASK_SLEEPING,  // 阻塞-睡眠
-    TASK_WARTING,   // 阻塞-等待
+    TASK_WAITING,   // 阻塞-等待
     TASK_DEAD,      // 死亡
 } task_state_t;
 
@@ -101,6 +102,9 @@ typedef struct task_t {
     struct inode_t* iexec;               // 程序二进制文件 inode
     u16 umask;                           // 进程用户权限
     struct file_t* files[TASK_FILE_NR];  // 进程文件表
+    u32 signal;                          // 进程信号位图
+    u32 blocked;                         // 进程信号屏蔽位图
+    sigaction_t actions[MAXSIG];         // 信号处理函数
     u32 magic;  // 检测内核栈溢出（溢出到 PCB 就寄了）
 } task_t;
 
@@ -133,6 +137,8 @@ extern task_t* task_list[TASK_NR];
 extern task_t* current;
 
 void task_init(void);
+
+task_t* get_task(pid_t pid);
 
 // 返回 current
 task_t* get_current();

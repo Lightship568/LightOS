@@ -4,6 +4,7 @@
 extern trap_handler_table
 extern printk
 extern syscall_0
+extern task_signal
 
 section .text
 
@@ -35,6 +36,8 @@ interrupt_exit:
 
     ; 对应 push eax / push 0x80，调用结束恢复栈
     add esp, 4
+    ; 调用信号处理
+    call task_signal
     ; 恢复寄存器
     popa
     pop gs

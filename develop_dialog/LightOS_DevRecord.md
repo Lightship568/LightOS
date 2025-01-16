@@ -3744,6 +3744,95 @@ PS：由于之前跳过了管道序列，所以进程组的概念也没有意义
 
 目前所有输入输出的逻辑都是绑定的 file_table 全局中的前三个（基础输入输出错误），而这三个在 dev.c 的初始化中被绑定到了 /dev/stdin, /dev/stdout, /dev/stderr 字符设备上，而这三个设备文件是通过硬连接直接绑定到键盘和控制台上的。所以只需要创建一个新的 tty 设备，设置好 read write ioctl，之后将硬链接的对象都改成这个 tty 设备即可，这样就可以在**键盘控制台**与**标准输入输出文件**中间增加一个 **tty 层**了。
 
+# 信号
+
+在 UNIX 系统中，信号是一种 **软件中断** 处理机制。信号机制提供了一种处理异步事件的方法。例如，
+
+1. 用户在终端键盘上键入 `CTRL+C` 组合键来终止一个程序的执行。该操作就会产生一个 `SIGINT` (SIGnal INTerrupt) 信号，并被发送到当前前台执行的进程中；
+2. 当进程设置了一个报警时钟，到期时，系统就会向进程发送一个 `SIGALRM` 信号；
+3. 当发生硬件异常时，系统也会向正在执行的进程发送相应的信号；
+4. 另外，一个进程也可以向另一个进程发送信号，使用 `kill()` 函数向同组的子进程发送终止执行信号。
+
+通常使用一个 32 位无符号长整数中的比特位表示各种不同信号（一种位图结构），因此最多可表示 32 个不同的信号。
+
+## 信号处理方式
+
+对于进程来说，当收到一个信号时，可以由三种不同的处理或操作方式。
+1. 忽略该信号：
+    大多数信号都可以被进程忽略。但有两个信号忽略不掉：`SIGKILL` 和 `SIGSTOP`。不能被忽略掉的原因是能为超级用户提供一个确定的方法来终止或停止指定的任何进程。另外，若忽略掉某些硬件异常而产生的信号（如除0错误），则进程的行为或状态就可能变得不可知了。
+2. 捕获该信号：
+    为了进行该操作，我们必须首先告诉内核在指定的信号发生时调用我们自定义的信号处理函数。在该处理函数中，我们可以做任何操作，当然也可以什么不做，起到忽略该信号的同样作用。自定义信号处理函数来捕获信号的一个例子是：如果我们在程序执行过程中创建了一些临时文件，那么我们就可以定义一个函数来捕获 `SIGTERM`（终止执行）信号，并在该函数中做一些清理临时文件的工作。`SIGTERM` 信号是 `kill` 命令发送的默认信号。
+3. 执行默认操作：
+    内核为每种信号都提供一种默认操作。通常这些默认操作就是终止进程的执行。
+
+## 总结与实现
+
+信号是一种软件实现的中断，其操作过程需要中断、以及 c runtime 的 restorer 来实现中断和恢复。所以虽然是软件中断，但仍然需要硬件中断辅助实现控制流的转移，最终信号处理的功能函数 task_signal 是放在了 interrupt_exit 部分。通过 iframe 的 rop，将返回 eip 设置为 handler，同时保存当前的eip 等信息进入 sig_frame，该结构体存放于 `iframe->esp - sizeof(signal_frame_t)`，这是用户态空间，并在此后设置 iframe esp 指向该结构体，这就相当于手动扩展了用户态栈空间，并使得进程上下文可供恢复。
+
+```c
+typedef struct signal_frame_t {
+    u32 restorer;  // 恢复函数
+    u32 sig;       // 信号
+    u32 blocked;   // 屏蔽位图
+    // 保存调用时的寄存器，用于恢复执行信号之前的代码
+    u32 eax;
+    u32 ecx;
+    u32 edx;
+    u32 eflags;
+    u32 eip;
+} signal_frame_t;
+```
+
+而实际上由于修改了用户栈，使得 handler 调用后的 ret 可以直接 rop 到 restorer 函数中（sig 是参数、restorer 是返回 eip）。此外这个 restorer 的符号和代码是自动引入到用户态程序空间的，这是因为 syscall.c 中使用 extern 引入了 restorer（需要共同编译进 libc 从而可以被链接），因此软中断的处理结束后是在用户态（handler -> restorer -> eip）自动恢复寄存器并跳转原始断点继续执行，真是巧妙！
+
+```c
+extern void restorer();
+int signal(int sig, int handler) {
+    return _syscall3(SYS_NR_SIGNAL, (u32)sig, (u32)handler, (u32)restorer);
+}
+```
+
+```c
+[bits 32]
+
+extern ssetmask
+section .text
+global restorer
+
+restorer:
+    add esp, 4; sig
+    call ssetmask
+    add esp, 4; blocked
+    ; 以下恢复调用方寄存器
+    pop eax
+    pop ecx
+    pop edx
+    popf
+    ret
+```
+
+## 中断栈帧 DEBUG
+
+程序自定义信号的返回是通过中断栈帧 iframe 实现的，与 move_to_user 原理一致，但是实际测试发现会出现非法地址访问的 PF。最终定位到了 iframe 获取的 Ring3 esp 不正确，甚至整个 iframe 参数都错误的情况。思考良久并多次调试后才想到，我的 tss.esp0 设置的 task->stack 的值是 PAGE_SIZE -1，而这会导致硬件压栈多出一个字节的偏移！当初这样设计是误以为 stack 的 ebp 不应该覆盖掉下一个 task 的 pcb，但实际上 push 的原理是先减后赋值，并不会修改到下一个 task 的 pcb，因此导致出现这个问题。
+
+修复了 create_task 和 fork 中的 task->stack 的错误偏移，并修复了 fork 中的 栈迁移逻辑。 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -28,6 +28,7 @@ BIN_APPS:= \
 	$(BUILD_ROOT_PATH)/touch.out	\
 	$(BUILD_ROOT_PATH)/err.out		\
 	$(BUILD_ROOT_PATH)/count.out	\
+	$(BUILD_ROOT_PATH)/kill.out		\
 	
 
 .PHONY: buildroot

@@ -7,7 +7,6 @@ int main(void) {
         printf("cannot run multiple init\n");
         return 0;
     }
-
     while (true) {
         u32 status;
         pid_t pid = fork();

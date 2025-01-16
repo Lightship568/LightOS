@@ -2,7 +2,7 @@
 #include <lightos/fs.h>
 #include <sys/errno.h>
 
-int sys_ioctl(fd_t fd, int cmd, void* args){
+int32 sys_ioctl(fd_t fd, int cmd, void* args){
     if (fd < 0 || fd >= TASK_FILE_NR){
         return -EBADF;
     }

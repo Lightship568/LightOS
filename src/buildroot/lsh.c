@@ -4,30 +4,19 @@
 #include <lib/vsprintf.h>
 #include <lightos/fs.h>
 #include <lightos/time.h> // 实现在lib/time.c，但是懒得改.h了
+#include <lib/signal.h>
+#include <lightos/tty.h>
 
 #define MAX_CMD_LEN 256
 #define MAX_ARG_NR 16
 #define BUFLEN 1024
 
+static bool interrupt = false; // 表示是否按下 ctrl+C
+
 static char cwd[MAX_PATH_LEN];
 static char cmd[MAX_CMD_LEN];
 static char* argv[MAX_ARG_NR];
 static char buf[BUFLEN];
-
-static const char* lightos_logo_ori =
-    "\n\t"
-    "\t /$$       /$$           /$$         /$$      /$$$$$$   /$$$$$$ \n"
-    "\t| $$      |__/          | $$        | $$     /$$__  $$ /$$__  $$\n"
-    "\t| $$       /$$  /$$$$$$ | $$$$$$$  /$$$$$$  | $$  \\ $$| $$  \\__/\n"
-    "\t| $$      | $$ /$$__  $$| $$__  $$|_  $$_/  | $$  | $$|  $$$$$$ \n"
-    "\t| $$      | $$| $$  \\ $$| $$  \\ $$  | $$    | $$  | $$ \\____  $$\n"
-    "\t| $$      | $$| $$  | $$| $$  | $$  | $$ /$$| $$  | $$ /$$  \\ $$\n"
-    "\t| $$$$$$$$| $$|  $$$$$$$| $$  | $$  |  $$$$/|  $$$$$$/|  $$$$$$/\n"
-    "\t|________/|__/ \\____  $$|__/  |__/   \\___/   \\______/  \\______/ \n"
-    "\t               /$$  \\ $$                                        \n"
-    "\t              |  $$$$$$/                                        \n"
-    "\t               \\______/                                         \n\0";
-
 
 // 定义 ANSI 颜色代码
 #define RED     "\033[31m"
@@ -145,6 +134,7 @@ static void builtin_pwd() {
 }
 
 static void builtin_clear(void) {
+    
     // todo
 }
 
@@ -390,6 +380,13 @@ pid_t builtin_command(char* filename,
         close(errfd);
     }
 
+    // 键盘中断信号置默认句柄
+    signal(SIGINT, (int)SIG_DFL);
+    
+    // 修改前台进程组
+    ioctl(STDIN_FILENO, TIOCSPGRP, getpid());
+    setpgid(getpid(), getpid());
+    // 执行！
     int i = execve(filename, argv, envp);
     exit(i);
 }
@@ -410,6 +407,9 @@ static void builtin_exec(int argc, char* argv[]) {
 
     pid_t pid = builtin_command(buf, &argv[1], dupfd[0], dupfd[1], dupfd[2]);
     waitpid(pid, &status, 0);
+
+    // 将 TTY 前台进程组设回 lsh
+    ioctl(STDIN_FILENO, TIOCSPGRP, getpid());
 }
 
 static void execute(int argc, char* argv[]) {
@@ -446,8 +446,22 @@ static void execute(int argc, char* argv[]) {
     return builtin_exec(argc, argv);
 }
 
+static int signal_handler(int sig){
+    // printf("pid %d signal 0x%x happened\n", getpid(), sig);
+    // 需重新注册以便下次生效
+    signal(SIGINT, (int)signal_handler);
+    interrupt = true;
+}
+
 int main(void) {
-    // setsid();
+
+    //注册信号 CTRL + C
+    signal(SIGINT, (int)signal_handler);
+
+    // 新建会话
+    setsid();
+    // 设置 TTY 进程组为 lsh
+    ioctl(STDIN_FILENO, TIOCSPGRP, getpid());
 
     memset(cmd, 0, sizeof(cmd));
     memset(cwd, 0, sizeof(cwd));
@@ -457,6 +471,11 @@ int main(void) {
     while (true) {
         print_prompt();
         readline(cmd, sizeof(cmd));
+        if (interrupt){
+            // 如果按下 ctrl c，重新读取命令
+            interrupt = false;
+            continue;
+        }
         if (cmd[0] == 0) {
             continue;
         }

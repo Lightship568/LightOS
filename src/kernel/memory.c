@@ -10,11 +10,15 @@
 #include <lib/print.h>
 
 // 关闭 memory 的内核注释
-#define LOGK(fmt, args...) DEBUGK(fmt, ##args)
-// #define LOGK(fmt, args...) ;
-#define LOGK_KMAP(fmt, args...) ;        // kmap 操作
-#define LOGK_ALLOC_OPTS(fmt, args...) ;  // 申请与释放相关操作
-#define LOGK_PT_OPTS(fmt, args...) DEBUGK(fmt, ##args)     // 页表相关操作
+// #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
+#define LOGK(fmt, args...) ;
+// kmap 操作
+#define LOGK_KMAP(fmt, args...) ;        
+// 申请与释放相关操作
+#define LOGK_ALLOC_OPTS(fmt, args...) ;  
+// 页表相关操作
+// #define LOGK_PT_OPTS(fmt, args...) DEBUGK(fmt, ##args)
+#define LOGK_PT_OPTS(fmt, args...) ;    
 
 #define ZONE_VALID 1     // ards 可用区域
 #define ZONE_RESERVED 2  // ards 不可用区域
@@ -682,11 +686,12 @@ void page_fault(int vector,
     u32 faulting_address;
     task_t* task;
     asm volatile("movl %%cr2, %0\n" : "=r"(faulting_address));
-    LOGK("PF at vaddress 0x%x\n", faulting_address);
 
     task = get_current();
     // 一定是用户态才能进入 PF，如果是内核PF，理应panic
     assert(task->uid == USER_RING3);
+
+    LOGK("pid %d PF at vaddress 0x%x\n", task->pid, faulting_address);
 
     if(faulting_address > USER_STACK_TOP){
         goto segmentation_fault;
@@ -763,7 +768,8 @@ void page_fault(int vector,
     }
 
 segmentation_fault:
-    printk("user access unmapped memory at 0x%x!\n", faulting_address);
+    DEBUGK("PF error: pid %d, name: %s\n", task->pid, task->name);
+    DEBUGK("user access unmapped memory at 0x%x!\n", faulting_address);
     printk("segmentation fault\n");
     sys_exit(-1);
 }

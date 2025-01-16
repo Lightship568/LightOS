@@ -145,5 +145,7 @@ pid_t getpgrp(void);
 int stty(void);
 int gtty(void);
 int ioctl(fd_t fd, int cmd, int args);
+int kill(pid_t pid, int signal);
+
 
 #endif

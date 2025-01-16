@@ -55,9 +55,14 @@ static u32 sys_test(void) {
 extern time_t sys_time();  // clock.c
 extern mode_t sys_umask(mode_t mask); // system.c
 extern int32 sys_execve(char* filename, char*argv[],char* envp[]); // execve.c
-extern int sys_ioctl(fd_t fd, int cmd, void* args); // ioctl.c
-extern int sys_stty(void); // tty.c
-extern int sys_gtty(void); // tty.c
+extern int32 sys_ioctl(fd_t fd, int cmd, void* args); // ioctl.c
+extern int32 sys_stty(void); // tty.c
+extern int32 sys_gtty(void); // tty.c
+extern int32 sys_kill(pid_t pid); // kernel/signal.c
+extern int sys_sgetmask(void);
+extern int sys_ssetmask(int newmask);
+extern int sys_signal(int sig, int handler, int restorer);
+extern int sys_sigaction(int sig, sigaction_t* action, sigaction_t* oldaction);
 
 // 系统调用表初始化，把散落各处的sys_处理函数指针保存到表中
 void syscall_init(void) {
@@ -107,6 +112,12 @@ void syscall_init(void) {
     syscall_table[SYS_NR_IOCTL] = sys_ioctl;
     syscall_table[SYS_NR_STTY] = sys_stty;
     syscall_table[SYS_NR_GTTY] = sys_gtty;
+    syscall_table[SYS_NR_KILL] = sys_kill;
+    syscall_table[SYS_NR_SIGNAL] = sys_signal;
+    syscall_table[SYS_NR_SGETMASK] = sys_sgetmask;
+    syscall_table[SYS_NR_SSETMASK] = sys_ssetmask;
+    syscall_table[SYS_NR_SIGACTION] = sys_sigaction;
+
 
 
     DEBUGK("Syscall initialized\n");

@@ -6,17 +6,19 @@
 #include <lib/print.h>
 #include <lib/stdlib.h>
 #include <lib/string.h>
+#include <lightos/device.h>
 #include <lightos/fs.h>
 #include <lightos/interrupt.h>
 #include <lightos/memory.h>
 #include <lightos/task.h>
 #include <lightos/timer.h>
+#include <lightos/tty.h>
 #include <sys/assert.h>
 #include <sys/errno.h>
 #include <sys/global.h>
 #include <sys/types.h>
-#include <lightos/tty.h>
-#include <lightos/device.h>
+
+#define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
 extern void init_kthread(void);
 
@@ -28,6 +30,18 @@ extern u32 jiffy;             // clock.c 时钟中断的ms间隔
 static list_t block_list;     // 阻塞任务链表
 static mutex_t mutex_test;    // 测试用的互斥量
 static rwlock_t rwlock_test;  // 测试用的读写锁
+
+task_t* get_task(pid_t pid) {
+    for (size_t i = 0; i < TASK_NR; i++) {
+        if (!task_list[i]) {
+            continue;
+        }
+        if (task_list[i]->pid == pid) {
+            return task_list[i];
+        }
+    }
+    return NULL;
+}
 
 task_t* get_current() {
     return current;
@@ -133,6 +147,7 @@ void idle(void) {
         : "m"(current->tss.esp), "m"(current->tss.ebp)  // 输入约束
         : "memory"  // 告诉编译器汇编代码会修改内存
     );
+    LOGK("Run IDLE & Start interrupt\n");
     // 开中断，这样切进程就能保留当前中断状态方便恢复eflags
     start_interrupt();
     while (true) {
@@ -158,7 +173,7 @@ pid_t task_create(void (*eip_ptr)(void),
     assert(sizeof(name) <= 16);
     strcpy(task->name, name);
 
-    u32 stack = (u32)task + PAGE_SIZE - 1;
+    u32 stack = (u32)task + PAGE_SIZE;
     task->stack = (u32*)stack;
     task->jiffies = 0;
     task->ticks = priority;
@@ -189,6 +204,17 @@ pid_t task_create(void (*eip_ptr)(void),
 
     // 魔数
     task->magic = LIGHTOS_MAGIC;
+
+    // 初始化信号
+    task->signal = 0;
+    task->blocked = 0;
+    for (size_t i = 0; i < MAXSIG; i++) {
+        sigaction_t* action = &task->actions[i];
+        action->flags = 0;
+        action->mask = 0;
+        action->handler = SIG_DFL;
+        action->restorer = NULL;
+    }
 
     // 关键 tss 初始化
     task->tss.eip = (u32)eip_ptr;
@@ -222,7 +248,7 @@ void task_init(void) {
     mutex_init(&mutex_test);
     rwlock_init(&rwlock_test);
     task_setup();
-    DEBUGK("Task initialized\n");
+    LOGK("Task initialized\n");
 }
 
 void sys_yield(void) {
@@ -255,13 +281,13 @@ pid_t sys_waitpid(pid_t pid, int32* status, int32 options) {
                 break;
             } else {
                 task->waitpid = pid;
-                task_block(task, NULL, TASK_WARTING);
+                task_block(task, NULL, TASK_WAITING);
                 continue;
             }
         }
         // 未找到 child，直接返回-1
-        DEBUGK("[waitpid] pid %n isn't chiled process of pid %n\n", pid,
-               task->pid);
+        LOGK("[waitpid] pid %n isn't chiled process of pid %n\n", pid,
+             task->pid);
         return -1;
     }
     // 清空子进程 PCB，返回其 pid
@@ -287,7 +313,7 @@ u32 sys_fork() {
     child->ppid = task->pid;
     child->ticks = child->priority;  // 重置时间片
     child->state = TASK_READY;       // fork 进来是中断关闭状态
-    child->stack = (u32*)((u32)child + PAGE_SIZE - 1);
+    child->stack = (u32*)((u32)child + PAGE_SIZE);
     child->tss.eax = pid;
     child->tss.esp0 = (u32)child->stack;
 
@@ -340,15 +366,34 @@ u32 sys_fork() {
     );
     // 迁移内核栈
     child->tss.esp =
-        (0xfff & child->tss.esp) | (0xfffff000 & (u32)child->stack);
+        (0xfff & child->tss.esp) | (u32)child;
     child->tss.ebp =
-        (0xfff & child->tss.ebp) | (0xfffff000 & (u32)child->stack);
+        (0xfff & child->tss.ebp) | (u32)child;
 
 child_task:
     // 返回值
     task = get_current();
     // asm volatile("mov %0, %%eax\n"::"r"(task->tss.eax):"memory");
     return task->tss.eax;
+}
+
+// 子进程退出，信号通知父进程
+static void task_tell_father(task_t* task) {
+    if (!task->ppid) {
+        return;
+    }
+    for (size_t i = 0; i < TASK_NR; i++) {
+        task_t* parent = task_list[i];
+        if (!parent) {
+            continue;
+        }
+        if (parent->pid != task->ppid) {
+            continue;
+        }
+        parent->signal |= SIGMASK(SIGCHLD);
+        return;
+    }
+    panic("task %d cannot find parent %d\n", task->pid, task->ppid);
 }
 
 u32 sys_exit(u32 status) {
@@ -386,23 +431,21 @@ u32 sys_exit(u32 status) {
     // 释放所有 timer
     timer_remove(task);
 
-    if (task_sess_leader(task)){
-        // todo: kill session
-        for (pid_t i = 0; i < TASK_NR; ++i){
+    // 信号通知父进程
+    task_tell_father(task);
+
+    if (task_sess_leader(task)) {
+        // 向会话中所有进程发送 SIGHUP
+        for (pid_t i = 0; i < TASK_NR; ++i) {
             task_t* tmptask = task_list[i];
-            if (!tmptask || tmptask->sid != task->sid || tmptask->pid == task->pid){
+            if (!tmptask || tmptask->sid != task->sid ||
+                tmptask->pid == task->pid) {
                 continue;
             }
-            // 可能要考虑读盘的缓冲偏移？读写时会阻塞并调度
-            // 在这个状态下杀死阻塞的进程将导致终端处理唤醒了 ctrl->waiter
-            // 该指针指向已释放的进程，肯定是不行的
-            // 而如果不管的话，IDE 会存有垃圾数据等待读取，也是一个问题。
-            
-            // sys_exit(tmptask);
-            
+            tmptask->signal |= SIGMASK(SIGHUP);
         }
-        // 释放与该 session 绑定的 tty 设备
-        if (task->tty > 0){
+        // 清空与该 session 绑定的 tty 设备的前台进程组
+        if (task->tty > 0) {
             device_t* device = device_get(task->tty);
             tty_t* tty = (tty_t*)device->ptr;
             tty->pgid = 0;
@@ -425,16 +468,17 @@ u32 sys_exit(u32 status) {
             // 将子进程托管给爷进程
             task_list[i]->ppid = task->ppid;
         } else if (task_list[i]->waitpid == task->pid) {
-            // 唤醒 TASK_WAIT 的父进程
-            assert(task_list[i]->state == TASK_WARTING);
-            task_intr_unblock_no_waiting_list(task_list[i]);
+            // 唤醒 TASK_WAIT 的父进程，当然也可能不是 waiting 状态
+            if (task_list[i]->state == TASK_WAITING) {
+                task_intr_unblock_no_waiting_list(task_list[i]);
+            }
             task_list[i]->waitpid = 0;
         }
         // todo 若父进程是init，则清理僵尸进程
     }
 
-    DEBUGK("Process %s (pid %d) exit with status %d\n", task->name, task->pid,
-           task->status);
+    LOGK("Process %s (pid %d) exit with status %d\n", task->name, task->pid,
+         task->status);
     schedule();
 }
 
@@ -530,7 +574,7 @@ bool task_sess_leader(task_t* task) {
 pid_t sys_setsid(void) {
     task_t* task = get_current();
     // 会话首领不可开启新会话
-    if (task_sess_leader(task)){
+    if (task_sess_leader(task)) {
         return -EPERM;
     }
     task->sid = task->pid;
@@ -545,7 +589,7 @@ int sys_setpgid(pid_t pid, pid_t pgid) {
     if (!pid) {
         // pid == 0，修改当前程序
         task = current_task;
-    }else{
+    } else {
         // 找到目标 pid 的 pcb
         for (int i = 0; i < TASK_NR; i++) {
             if (!task_list[i] || task_list[i]->pid != pid) {
@@ -559,7 +603,7 @@ int sys_setpgid(pid_t pid, pid_t pgid) {
     if (!pgid) {
         pgid = current_task->pid;
     }
-    if (!task){
+    if (!task) {
         return -ESRCH;
     }
     // 会话首领不可修改进程组
@@ -570,7 +614,7 @@ int sys_setpgid(pid_t pid, pid_t pgid) {
     if (task->sid != current_task->sid) {
         return -EPERM;
     }
-    task->gid = pgid;
+    task->pgid = pgid;
     return EOK;
 }
 
